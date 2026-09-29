@@ -204,6 +204,7 @@ def main():
     check_vem_3d()
     check_rt0()
     check_rt0_3d()
+    check_helmholtz()
     print("\npatch test 通过：", ok)
     print("\n全部检查结束。")
 
@@ -225,6 +226,64 @@ def check_rt0_3d(levels=(2, 4, 8)):
     }))
     print(f"  rate[pressure L2] = {estimate_convergence_rate(hs, l2, use_last=2):.3f}")
     print(f"  rate[flux L2]     = {estimate_convergence_rate(hs, q2, use_last=2):.3f}")
+
+
+def discrete_first_eigenvalue(space):
+    """内点上广义特征问题 ``K v = lambda M v`` 的最小特征值（离散 lambda_1）。
+
+    这是"低频"的判据：``lambda_1,h`` 从上方逼近 -Laplacian 的 Dirichlet
+    第一特征值（单位正方形上为 2*pi^2 = 19.7392），要求 ``k**2 < lambda_1,h``。
+    """
+    K, M = space.stiffness_matrix(), space.mass_matrix()
+    interior = np.setdiff1d(np.arange(space.n_dofs), space.boundary_dofs())
+    Kii = K.tocsc()[interior][:, interior]
+    Mii = M.tocsc()[interior][:, interior]
+    try:
+        from scipy.sparse.linalg import eigsh
+
+        return float(eigsh(Kii, k=1, which="SA", M=Mii, return_eigenvectors=False)[0])
+    except Exception:
+        return float("nan")
+
+
+def check_helmholtz(levels=(4, 8, 16, 32)):
+    """低频亥姆霍兹 ``-Δu - k²u = f``（k = 1，常数波数）+ 低频判据。"""
+    k = 1.0
+    src = lambda x: (2.0 * np.pi ** 2 - k ** 2) * exact_2d(x)  # noqa: E731
+    print(f"\n=== Helmholtz -Δu - k^2 u = f (k = {k:g}, 常数波数) ===")
+    for elem, mesh_factory in (
+        ("P1", lambda n: mf.Mesh.rectangle(nx=n, ny=n)),          # noqa: E731
+        ("P2", lambda n: mf.Mesh.rectangle(nx=n, ny=n)),          # noqa: E731
+        ("Q1", lambda n: mf.Mesh.rectangle(nx=n, ny=n, element_type="quad")),  # noqa: E731
+        ("VEM", lambda n: mf.Mesh.rectangle(nx=n, ny=n)),         # noqa: E731
+    ):
+        hs, errs = [], {"L2": [], "H1": [], "Linf": []}
+        for n in levels:
+            mesh = mesh_factory(n)
+            V = mf.make_space(mesh, elem)
+            problem = mf.HelmholtzProblem(V, f=src, g=ZERO, k=k)
+            u = problem.solve(method="direct")
+            e = problem.compute_errors(u, exact_2d, grad_2d)
+            hs.append(mesh.get_mesh_size())
+            for key in errs:
+                errs[key].append(e[key])
+        hs = np.asarray(hs)
+        errs = {key: np.asarray(val) for key, val in errs.items()}
+        print(f"\n--- Helmholtz / {elem} ---")
+        print(rate_table(hs, errs))
+        print(f"  rate[L2] (last 3) = {estimate_convergence_rate(hs, errs['L2'], use_last=3):.3f}"
+              f"  rate[H1] (last 3) = {estimate_convergence_rate(hs, errs['H1'], use_last=3):.3f}")
+
+    # 低频判据：离散第一特征值 vs k^2
+    print("\n--- Helmholtz: 低频判据（k = 1, k^2 = 1）---")
+    for elem in ("P1", "P2", "VEM"):
+        mesh = mf.Mesh.rectangle(nx=32, ny=32)
+        V = mf.make_space(mesh, elem)
+        lam = discrete_first_eigenvalue(V)
+        print(f"  {elem:>4s}: lambda_1,h = {lam:.4f}   k^2/lambda_1,h = {k ** 2 / lam:.4f}")
+    print("  参考：单位正方形上 lambda_1 = 2 pi^2 = %.4f（Galerkin 从上方逼近）"
+          % (2.0 * np.pi ** 2))
+    print("  K*h 序列：", np.round(k * np.array([1.0 / n for n in levels]), 4))
 
 
 if __name__ == "__main__":

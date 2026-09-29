@@ -10,6 +10,13 @@
    f = lambda x: 2 * np.pi ** 2 * np.sin(np.pi * x[0]) * np.sin(np.pi * x[1])
    u = solve_poisson(Mesh.rectangle(nx=32, ny=32), element="P2", f=f)
 
+同一个问题换成亥姆霍兹方程 ``-Laplacian(u) - k**2 u = f`` 也只是换个函数：
+
+.. code-block:: python
+
+   from MosicaFE import solve_helmholtz
+   u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=f, k=1.0)
+
 ``element`` 可选（大小写不敏感）：
 
 ===============  =========================================
@@ -29,6 +36,7 @@ from __future__ import annotations
 import numpy as np
 
 from .core.mesh import Mesh
+from .physics.helmholtz import HelmholtzProblem
 from .physics.mixed_poisson import MixedPoissonProblem
 from .physics.poisson import PoissonProblem
 from .physics.registry import create_problem
@@ -39,6 +47,7 @@ __all__ = [
     "resolve_element",
     "make_space",
     "solve_poisson",
+    "solve_helmholtz",
     "run",
 ]
 
@@ -155,6 +164,59 @@ def solve_poisson(
         return Q, P
 
     problem = PoissonProblem(space, f=f, g=g, kappa=kappa)
+    u = problem.solve(method=solver)
+    if return_all:
+        return {"u": u, "space": space, "problem": problem, "mesh": mesh}
+    return u
+
+
+def solve_helmholtz(
+    mesh=None,
+    element: str = "P1",
+    f=None,
+    g=None,
+    k: float = 1.0,
+    kappa: float = 1.0,
+    degree: int = None,
+    solver: str = "auto",
+    region=None,
+    return_all: bool = False,
+    **kwargs,
+):
+    """一行求解亥姆霍兹方程 ``-div(kappa grad u) - k**2 u = f``。
+
+    参数与 :func:`solve_poisson` 完全平行，只多了一个实常数波数 ``k``
+    （``kappa`` 仍默认 1）：
+
+    .. code-block:: python
+
+       from MosicaFE import Mesh, solve_helmholtz
+
+       f = lambda x: (2*np.pi**2 - 1.0) * np.sin(np.pi*x[0]) * np.sin(np.pi*x[1])
+       u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=f, k=1.0)
+
+    ``k**2`` 必须小于 ``-Laplacian`` 的 Dirichlet 第一特征值 ``lambda_1``
+    （单位正方形上为 ``2*pi**2``），否则问题进入共振区，矩阵对称不定，
+    应改用 ``solver="direct"`` 或 ``"minres"``。
+
+    ``element`` 接受 ``"P1" / "P2" / "Q1" / "Q2" / "VEM"``；
+    ``"RT0"`` 是混合格式、没有对应的亥姆霍兹实现，会被明确拒绝。
+    """
+    if mesh is None:
+        if region is None:
+            raise ValueError("请提供 mesh（Mesh 对象或工厂参数字典），或用 region=... 指定区域")
+        mesh = region if isinstance(region, Mesh) else _coerce_mesh(region)
+    else:
+        mesh = _coerce_mesh(mesh)
+
+    family, deg = resolve_element(element, degree)
+    if family == "rt0":
+        raise ValueError(
+            "RT0×P0 是混合（鞍点）格式，不支持亥姆霍兹方程；"
+            "请用 element='P1' / 'P2' / 'Q1' / 'Q2' / 'VEM'。"
+        )
+    space = FESpace.create(mesh, family=family, degree=deg, **kwargs)
+    problem = HelmholtzProblem(space, f=f, g=g, k=k, kappa=kappa)
     u = problem.solve(method=solver)
     if return_all:
         return {"u": u, "space": space, "problem": problem, "mesh": mesh}

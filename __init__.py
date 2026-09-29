@@ -28,6 +28,14 @@
    from MosicaFE import Mesh, solve_poisson
    u = solve_poisson(Mesh.rectangle(nx=32, ny=32), element="VEM", f=source)
 
+换方程同样只改一行——内置方程有 ``poisson`` / ``reaction_diffusion`` /
+``helmholtz`` / ``mixed_poisson``：
+
+.. code-block:: python
+
+   from MosicaFE import Mesh, solve_helmholtz
+   u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=source, k=1.0)
+
 模块结构（与 guidebook 第 1.4 节一致）：
 
 ``core``        网格、面拓扑、求积规则、几何工具
@@ -45,6 +53,7 @@ FEM、VEM、RT0 三类元都是库自身的实现：RT0×P0 的单元基函数�
 from __future__ import annotations
 
 from .api import ELEMENT_ALIASES, make_space, resolve_element, run, solve_poisson
+from .api import solve_helmholtz
 from .core.facets import FacetTopology, build_facet_topology
 from .core.mesh import Mesh
 from .core.quadrature import (
@@ -54,6 +63,7 @@ from .core.quadrature import (
     simplex_quadrature,
 )
 from .physics.base import BasePhysics
+from .physics.helmholtz import HelmholtzProblem
 from .physics.mixed_poisson import MixedPoissonProblem
 from .physics.poisson import PoissonProblem
 from .physics.reaction_diffusion import ReactionDiffusionProblem
@@ -107,6 +117,7 @@ __all__ = [
     "PoissonProblem",
     "MixedPoissonProblem",
     "ReactionDiffusionProblem",
+    "HelmholtzProblem",
     "register_problem",
     "get_problem_class",
     "available_problems",
@@ -130,6 +141,7 @@ __all__ = [
     "compare_solutions",
     # api
     "solve_poisson",
+    "solve_helmholtz",
     "run",
     "make_space",
     "resolve_element",

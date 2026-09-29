@@ -143,6 +143,99 @@ def test_reaction_diffusion_recovers_poisson():
 
 
 # ---------------------------------------------------------------------------
+# 亥姆霍兹方程（内置方程）
+# ---------------------------------------------------------------------------
+def helmholtz_source(k):
+    """制造解 u = sin(pi x) sin(pi y) 对应的源项：f = (2 pi^2 - k^2) u。"""
+    return lambda x: (2.0 * np.pi ** 2 - k ** 2) * exact2(x)
+
+
+def test_helmholtz_registered():
+    assert "helmholtz" in available_problems()
+    assert mf.get_problem_class("helmholtz") is mf.HelmholtzProblem
+
+
+def test_helmholtz_recovers_poisson_and_scales_with_kappa():
+    """k = 0 退化为 Poisson；kappa 只是常数因子。"""
+    mesh = mf.Mesh.rectangle(nx=16, ny=16)
+    a = mf.PoissonProblem(mf.make_space(mesh, "P1"), f=source2, g=zero).solve()
+    b = mf.HelmholtzProblem(mf.make_space(mesh, "P1"), f=source2, g=zero,
+                            k=0.0).solve()
+    assert np.abs(a - b).max() < 1e-12
+
+    c = mf.HelmholtzProblem(mf.make_space(mesh, "P1"), f=source2, g=zero,
+                            k=0.0, kappa=2.5).solve()
+    d = mf.PoissonProblem(mf.make_space(mesh, "P1"), f=source2, g=zero,
+                          kappa=2.5).solve()
+    assert np.abs(c - d).max() < 1e-12
+
+
+@pytest.mark.parametrize("elem,expected_l2", [("P1", 1.9), ("P2", 2.8), ("VEM", 1.8)])
+def test_helmholtz_convergence_2d(elem, expected_l2):
+    """低频（k = 1）时亥姆霍兹的收敛阶与 Poisson 相同。"""
+    k = 1.0
+    hs, l2 = [], []
+    for n in (4, 8, 16):
+        mesh = mf.Mesh.rectangle(nx=n, ny=n)
+        V = mf.make_space(mesh, elem)
+        problem = mf.HelmholtzProblem(V, f=helmholtz_source(k), g=zero, k=k)
+        u = problem.solve(method="direct")
+        hs.append(mesh.get_mesh_size())
+        l2.append(problem.compute_error(u, exact2, "L2"))
+    assert mf.estimate_convergence_rate(hs, l2, use_last=2) > expected_l2
+
+
+def test_helmholtz_definiteness_switches_at_resonance():
+    """低频 k^2 < lambda_1 时 A 对称正定；越过第一特征值后出现负特征值。"""
+    mesh = mf.Mesh.rectangle(nx=16, ny=16)
+    V = mf.make_space(mesh, "P1")
+
+    def smallest_eigenvalue(k):
+        A, _ = mf.HelmholtzProblem(V, f=source2, g=zero, k=k).assemble()
+        dense = A.toarray() if hasattr(A, "toarray") else np.asarray(A)
+        assert np.abs(dense - dense.T).max() < 1e-12      # 对称
+        return float(np.linalg.eigvalsh(dense)[0])
+
+    assert smallest_eigenvalue(0.0) > 0.0                  # k = 0：就是 Poisson
+    assert smallest_eigenvalue(3.0) > 0.0                  # 低频
+    assert smallest_eigenvalue(5.0) < 0.0                  # 5^2 = 25 > 2 pi^2
+
+
+def test_helmholtz_rejects_non_real_or_rt0():
+    mesh = mf.Mesh.rectangle(nx=4, ny=4)
+    V = mf.make_space(mesh, "P1")
+    with pytest.raises(TypeError):
+        mf.HelmholtzProblem(V, f=source2, k=1.0j)
+    with pytest.raises(TypeError):
+        mf.HelmholtzProblem(V, f=source2, k=1.0, kappa="big")
+    with pytest.raises(ValueError):
+        mf.solve_helmholtz(mesh, element="RT0", f=source2, k=1.0)
+
+
+@pytest.mark.parametrize("elem", ["P1", "P2", "Q1", "Q2", "VEM"])
+def test_solve_helmholtz_api(elem):
+    et = "quad" if elem.startswith("Q") else "triangle"
+    mesh = mf.Mesh.rectangle(nx=6, ny=6, element_type=et)
+    k = 1.0
+    u = mf.solve_helmholtz(mesh, element=elem, f=helmholtz_source(k), g=zero, k=k)
+    assert u.shape[0] > 0 and np.isfinite(u).all()
+
+    out = mf.solve_helmholtz(mesh, element=elem, f=helmholtz_source(k), g=zero,
+                             k=k, return_all=True)
+    assert out["u"].size == out["space"].n_dofs
+    assert isinstance(out["problem"], mf.HelmholtzProblem)
+
+
+def test_helmholtz_by_name_api():
+    mesh = mf.Mesh.rectangle(nx=8, ny=8)
+    k = 1.0
+    u1 = mf.run("helmholtz", mesh, element="P2", f=helmholtz_source(k), g=zero, k=k)
+    V = mf.make_space(mesh, "P2")
+    u2 = mf.create_problem("helmholtz", V, f=helmholtz_source(k), g=zero, k=k).solve()
+    assert np.abs(u1 - u2).max() < 1e-12
+
+
+# ---------------------------------------------------------------------------
 # RT0 混合元
 # ---------------------------------------------------------------------------
 def test_rt0_mixed_solve_2d():
@@ -202,11 +295,11 @@ def test_element_alias_resolution():
 
 
 def test_registry_and_custom_pde():
-    name = "test_helmholtz"
+    name = "test_custom_pde"
     if name not in available_problems():
 
         @register_problem(name)
-        class _Helmholtz(BasePhysics):
+        class _CustomPDE(BasePhysics):
             def __init__(self, space, f=None, g=None, k=1.0, **kw):
                 super().__init__(space, f=f, g=g, **kw)
                 self.k = k
