@@ -236,12 +236,25 @@ def discrete_first_eigenvalue(space):
     """
     K, M = space.stiffness_matrix(), space.mass_matrix()
     interior = np.setdiff1d(np.arange(space.n_dofs), space.boundary_dofs())
-    Kii = K.tocsc()[interior][:, interior]
-    Mii = M.tocsc()[interior][:, interior]
+    if hasattr(K, "tocsc"):
+        Kii = K.tocsc()[interior][:, interior]
+        Mii = M.tocsc()[interior][:, interior]
+    else:
+        Kii = np.asarray(K)[np.ix_(interior, interior)]
+        Mii = np.asarray(M)[np.ix_(interior, interior)]
     try:
         from scipy.sparse.linalg import eigsh
 
         return float(eigsh(Kii, k=1, which="SA", M=Mii, return_eigenvectors=False)[0])
+    except Exception:
+        pass
+    try:
+        from scipy.linalg import eigh
+
+        dense_K = Kii.todense() if hasattr(Kii, "todense") else np.asarray(Kii)
+        dense_M = Mii.todense() if hasattr(Mii, "todense") else np.asarray(Mii)
+        return float(eigh(np.asarray(dense_K, dtype=float),
+                          np.asarray(dense_M, dtype=float), eigvals_only=True)[0])
     except Exception:
         return float("nan")
 
@@ -280,7 +293,8 @@ def check_helmholtz(levels=(4, 8, 16, 32)):
         mesh = mf.Mesh.rectangle(nx=32, ny=32)
         V = mf.make_space(mesh, elem)
         lam = discrete_first_eigenvalue(V)
-        print(f"  {elem:>4s}: lambda_1,h = {lam:.4f}   k^2/lambda_1,h = {k ** 2 / lam:.4f}")
+        print(f"  {elem:>4s}: lambda_1,h = {lam:.4f}   "
+              f"k^2/lambda_1,h = {k ** 2 / max(lam, 1e-300):.4f}")
     print("  参考：单位正方形上 lambda_1 = 2 pi^2 = %.4f（Galerkin 从上方逼近）"
           % (2.0 * np.pi ** 2))
     print("  K*h 序列：", np.round(k * np.array([1.0 / n for n in levels]), 4))
