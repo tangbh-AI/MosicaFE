@@ -441,7 +441,3 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 ## 许可
 
 MosicaFE 按 MIT 发布，全部代码都是库自身实现。
-
-RT0×P0 部分（`core/facets.py`、`spaces/rt0.py`、`physics/mixed_poisson.py`）
-由作者自己的 `rt0fem` 程序（`D:\mosica\RT0`，MIT）重写并入本库，
-不再以内嵌第三方包的形式存在；原始 `rt0fem` 包仍可独立使用。
