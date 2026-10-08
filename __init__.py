@@ -147,3 +147,18 @@ __all__ = [
     "resolve_element",
     "ELEMENT_ALIASES",
 ]
+
+# Optional PyTorch API is loaded only when these attributes are requested.
+_DEEPLEARNING_EXPORTS = {
+    "Domain", "MLP", "PDEData", "PINNProblem", "SupervisedProblem", "Trainer",
+    "TrainingConfig", "NeuralSolution", "solve_pinn", "solve_supervised",
+}
+
+
+def __getattr__(name):
+    if name in _DEEPLEARNING_EXPORTS:
+        from importlib import import_module
+        value = getattr(import_module(".deeplearning", __name__), name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

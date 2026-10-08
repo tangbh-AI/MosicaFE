@@ -48,6 +48,9 @@ def _iter_cases(func):
 
 
 def main():
+    if HAVE_PYTEST:
+        # Real pytest handles fixtures, skips and parameterized cases correctly.
+        return pytest.main([_HERE, "-q"])
     modules = [
         name[:-3]
         for name in sorted(os.listdir(_HERE))
@@ -58,6 +61,9 @@ def main():
     print(f"MosicaFE 测试运行器（pytest 可用：{HAVE_PYTEST}）")
     print("=" * 72)
     for mod_name in modules:
+        if mod_name == "test_deeplearning":
+            print("  skip  test_deeplearning (requires optional pytest and torch)")
+            continue
         module = importlib.import_module(mod_name)
         for attr in sorted(dir(module)):
             if not attr.startswith("test_"):

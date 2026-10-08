@@ -421,7 +421,10 @@ class RT0Space(BaseFESpace):
             verts = nodes[self._facet_vertices[f]]
             pts, w = simplex_quadrature(verts, order=3)
             vals = np.array([np.asarray(q(p), dtype=float).ravel() for p in pts])
-            Phi[f] = float(np.sum(w * (vals @ self._topology.normals[f])))
+            # normals stores vector area, while w already includes the face measure.
+            normal = self._topology.normals[f]
+            unit_normal = normal / np.linalg.norm(normal)
+            Phi[f] = float(np.sum(w * (vals @ unit_normal)))
         return Phi
 
     def interpolate(self, f):
@@ -434,12 +437,13 @@ class RT0Space(BaseFESpace):
     # ------------------------------------------------------------------
     # 重构与误差分析
     # ------------------------------------------------------------------
-    def local_flux_values(self, cell_idx: int, values) -> np.ndarray:
+    def local_flux_values(self, cell_idx: int, values, *, global_values=False) -> np.ndarray:
         """把各种形式的解向量换成单元 ``cell_idx`` 的**外法向**通量 ``(d+1,)``。
 
         接受逐单元通量表 ``(n_cells, d+1)``（``solve()`` 返回的 ``Q``）、
         单单元的局部通量 ``(d+1,)``、全局通量自由度 ``(n_flux,)``，
         或完整混合解 ``(n_dofs,)``（压力部分被忽略）。
+        单单元网格的局部/全局向量长度相同；转换全局向量时显式传 global_values=True。
         """
         arr = np.asarray(values, dtype=float)
         n = self.mesh.dim + 1
@@ -450,6 +454,12 @@ class RT0Space(BaseFESpace):
                 f"通量表形状应为 ({self.mesh.n_cells}, {n})，收到 {arr.shape}"
             )
         v = arr.ravel()
+        if global_values:
+            if v.size == self.n_dofs:
+                v = v[:self.n_flux]
+            if v.size != self.n_flux:
+                raise ValueError(f"全局通量长度应为 {self.n_flux} 或 {self.n_dofs}")
+            return self._facet_signs[cell_idx] * v[self._cell_facet_dofs[cell_idx]]
         if v.size == n:
             return v
         if v.size == self.n_dofs:

@@ -1,6 +1,6 @@
 # MosicaFE
 
-**一个统一调用 FEM / VEM / RT0 求解偏微分方程的 Python 库。**
+**一个统一调用 FEM / VEM / RT0 / PyTorch 深度学习求解偏微分方程的 Python 库。**
 
 MosicaFE 把三套原本互相独立的程序整合成同一套接口：**选网格 → 选元 → 选求解器 → 选可视化**，
 主文件通常只有几行代码。
@@ -36,6 +36,8 @@ u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=source, k=1.0)
 * [误差与收敛性](#误差与收敛性)
 * [可视化](#可视化)
 * [扩展到其它 PDE](#扩展到其它-pde)
+* [PyTorch 深度学习](#pytorch-深度学习)
+* [日志与断点续训](#日志与断点续训)
 * [包结构](#包结构)
 * [验证结果](#验证结果)
 * [已知限制](#已知限制)
@@ -55,10 +57,10 @@ python -m pip install -e .
 不安装也可以，只要把**父目录**加进 `PYTHONPATH`：
 
 ```powershell
-# PowerShell（本机推荐用 conda 环境 fealpy）
-cd D:\mosica
-$env:PYTHONPATH = "D:\mosica"
-& "D:\anaconda\envs\fealpy\python.exe" MosicaFE\examples\poisson_demo.py
+# PowerShell：本项目统一使用 conda 环境 AI4Sci
+cd D:\code\dcm_pro
+$env:PYTHONPATH = "D:\code\dcm_pro"
+& "D:\anaconda\envs\AI4Sci\python.exe" MosicaFE\examples\poisson_demo.py
 ```
 
 ---
@@ -225,7 +227,7 @@ f = V.pressure_load_vector(src) # (P,)   ∫_K f
 
 时谐波的模型问题（常数波数 $k$、常数扩散系数 $\kappa$）：
 
-$$\nabla\cdot(\kappa\nabla u) - k^2u = f,\qquad u=g\ \text{on}\ \partial\Omega$$
+$$-\nabla\cdot(\kappa\nabla u) - k^2u = f,\qquad u=g\ \text{on}\ \partial\Omega$$
 
 它就是"刚度矩阵 $-$ $k^2\times$ 质量矩阵"，与 Poisson 完全共用一套元、求解器和后处理：
 
@@ -368,6 +370,7 @@ MosicaFE/
                （Poisson / Helmholtz / ReactionDiffusion / MixedPoisson + 注册表）
   solvers/     线性求解器
   postprocess/ 误差分析（含混合格式）、收敛性研究、可视化
+  deeplearning/ PyTorch MLP、PINN、监督学习、自动微分、数据交换、日志与续训
   examples/    可运行示例
   tests/       测试与自检脚本
 ```
@@ -413,8 +416,8 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 一条命令复现：
 
 ```powershell
-& "D:\anaconda\envs\fealpy\python.exe" MosicaFE\tests\run_checks.py
-& "D:\anaconda\envs\fealpy\python.exe" MosicaFE\tests\run_tests.py
+& "D:\anaconda\envs\AI4Sci\python.exe" MosicaFE\tests\run_checks.py
+& "D:\anaconda\envs\AI4Sci\python.exe" -m pytest MosicaFE/tests -q
 ```
 
 ---
@@ -435,6 +438,121 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
   但严格来说在 VEM 的星形正则性假设之外。
 * 误差范数中，VEM 的解函数用"顶点自由度上的线性最小二乘重构"代替
   （虚拟元没有显式基函数），收敛阶与 `u_h` 一致。
+
+---
+
+## PyTorch 深度学习
+
+完整手册见 [MosicaFE_guidebook.md](MosicaFE_guidebook.md)，模块位于 `MosicaFE/deeplearning/`。
+仅使用 PyTorch，作为可选依赖：传统 `import MosicaFE` 不加载 torch。
+从本仓库安装可以运行 `python -m pip install -e ./MosicaFE[deeplearning]`（使用 AI4Sci）。
+内置普通全连接 `MLP`，训练方式为 PINN 或基于 PDE 解数据的监督学习。
+
+**几行代码求解 Poisson**，保持手册的“选区域 → 选网络 → 选问题 → 求解 → 后处理”流程：
+
+```python
+import numpy as np
+from MosicaFE import Mesh, FESpace, plot_solution
+from MosicaFE.deeplearning import MLP, PINNProblem
+
+mesh = Mesh.rectangle(nx=8, ny=8)
+f = lambda x: 2*np.pi**2 * np.sin(np.pi*x[0]) * np.sin(np.pi*x[1])
+network = MLP(2, hidden_layers=(32, 32, 32), bounds=[[0, 1], [0, 1]])
+u = PINNProblem(mesh, network, f=f).solve(epochs=2000, lr=.003)
+V = FESpace.lagrange(mesh, degree=2)
+plot_solution(u.to_fe(V), mesh, V, filename=str(u.run_dir / "solution.png"))
+```
+
+一行式入口：
+
+```python
+from MosicaFE.deeplearning import Domain, solve_pinn
+u = solve_pinn(Domain.interval(), f=2., epochs=1000)  # -u''=2, u(0)=u(1)=0
+print(u([[.25], [.5], [.75]]))
+```
+
+`solve_pinn` 的内置 `equation` 为 `poisson`、`reaction_diffusion`、`helmholtz`、`heat`；
+热方程必须显式传入空间边界和初值，不能把终止时刻误当成 Dirichlet 边界。
+自定义方程使用 `residual(x,u)` 和 torch 自动微分，支持多输出 PDE 系统。
+
+**普通全连接网络求解 PDE 数据**：
+
+```python
+from MosicaFE import PoissonProblem
+from MosicaFE.deeplearning import PDEData, solve_supervised
+uh = PoissonProblem(V, f=f).solve()                # FEM，也可选 VEM
+data = PDEData.from_fe(V, uh)                    # 真实单元内求积采样
+u_nn = solve_supervised(data, domain=mesh, epochs=2000, lr=.003)
+uh_nn = u_nn.to_fe(V)                           # 返回传统自由度向量
+```
+
+监督网络的 PDE 信息由训练数据提供；边界样本本身不足以确定内部 PDE 解。
+PINN 无需内部解标签，使用 PDE 残差与边界/初值训练。
+将 `data=data` 传给 `PINNProblem`，即可组合残差、边界和 FEM/VEM/RT0 数据损失。
+
+| 功能 | 接口 |
+| --- | --- |
+| numpy 源项/边界 | 默认 `f(point)` / `g(point)`，与传统接口一致 |
+| torch 源项/变系数 | `backend="torch"`，函数接受 `(N,dim)`，返回 `(N,1)` |
+| 自动微分 | `gradient` / `derivative` / `laplacian` / `divergence` |
+| 条件 | `DirichletBC` / `NeumannBC` / `InitialCondition` / `PointCondition` |
+| 自定义方程 | `PINNProblem(..., residual=lambda x,u: ...)` |
+| 预测/梯度 | `u(points)` / `u.gradient(points)` / `u.tensor(points)` |
+| 神经解积分误差 | `u.compute_errors(exact, exact_grad, mesh=mesh)` |
+| FEM/VEM 转入 | `PDEData.from_fe(V, uh)` |
+| FEM/VEM 转出 | `u.to_fe(V)`，节点插值，不是 L2 投影 |
+| RT0 数据 | `PDEData.from_fe(Vrt, (Q,P), field="pressure"/"flux")` |
+| RT0 转出 | `u.to_pressure(Vrt)` / `u.to_flux(Vrt)`，后者返回全局面通量 |
+
+全局面通量转为单元局部通量使用 `Vrt.local_flux_values(c, Phi, global_values=True)`。
+
+网格区域直接使用原库单元求积与真实边界面；盒区域支持随机内部/边界采样。
+默认 double precision、CPU、Adam；可选 `device="cuda"`、`dtype="float32"` 和 `optimizer="lbfgs"`。
+二阶 PINN 默认 tanh，并拒绝 ReLU；自定义网络需保持样本之间独立，不能用批次耦合层。
+
+可运行示例：
+
+```powershell
+cd D:\code\dcm_pro
+$env:MPLBACKEND = "Agg"
+& "D:\anaconda\envs\AI4Sci\python.exe" MosicaFE/examples/deeplearning_poisson.py --epochs 2000 --run-dir logs/poisson_run
+& "D:\anaconda\envs\AI4Sci\python.exe" MosicaFE/examples/deeplearning_fem_data.py --epochs 2000 --run-dir logs/fem_data_run
+& "D:\anaconda\envs\AI4Sci\python.exe" MosicaFE/examples/deeplearning_heat.py --epochs 2500 --run-dir logs/heat_run
+```
+
+PINN 示例的 `compute_errors` 测量实际神经函数；`plot_solution(u.to_fe(V),...)` 展示其离散插值。
+当前实现是单个问题的求解/逼近框架，未实现跨参数神经算子、DeepONet、FNO 或弱形式联合训练。
+训练误差小不等于严格收敛，示例输出独立评估点/单元求积误差。
+
+## 日志与断点续训
+
+**铁则：所有运行日志和进度必须保存；每次主动结束前记录当前进度；长任务开始前预记恢复方式，
+并在执行中周期保存，以应对被动结束。** 根目录 `D:\code\dcm_pro\AGENTS.md` 定义该规则，
+`WORK_PROGRESS.md` 保存项目进度，`logs/` 保留命令输出及训练产物。
+
+训练默认自动创建唯一目录 `D:\code\dcm_pro\logs\deeplearning/<时间戳_编号>/`。
+每个目录保留：`config_<会话>.json`、`training_<会话>.log`、每步写入的 `metrics_<会话>.jsonl`、
+`status.json` 和原子替换的 `last.pt`。训练前保存初始检查点，默认每 50 步及正常结束时保存。
+Python 异常保存 `failure.pt`，Ctrl+C 保存 `interrupted.pt` 后重新抛出异常。
+非空目录禁止作为新训练目录静默覆盖；续训会新增会话日志。
+
+```python
+from MosicaFE.deeplearning import NeuralSolution
+u = solve_pinn(mesh, f=f, epochs=3000, lr=.003,
+               resume_from="logs/poisson_run/last.pt")
+u_loaded = NeuralSolution.load("logs/poisson_run/last.pt")  # MLP 推理，不需要训练
+```
+
+续训 `epochs` 是**累计目标**；必须重建同一 PDE、网络及条件，并保持优化器、dtype、lr 等设置。
+保存内容含网络、优化器、随机状态、采样点、条件值、训练数据和历史。
+自定义 Python 回调/残差不被序列化，需按原定义重建；推理加载支持内置 MLP。
+操作系统强制终止或断电无法执行退出回调，此时从最近的完整检查点恢复，至多损失一个保存周期的训练。
+将 `checkpoint_every=1` 可每步保存。命令输出应另存日志，例如：
+
+```powershell
+& "D:\anaconda\envs\AI4Sci\python.exe" -m pytest MosicaFE/tests -q 2>&1 |
+    Tee-Object -FilePath logs/tests_20261008.log
+```
 
 ---
 

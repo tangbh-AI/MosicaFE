@@ -1,5 +1,34 @@
-*/__pycache__
+# Python / test / analysis caches (safe to regenerate)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-.vscode
+# Packaging outputs (source and pyproject.toml remain tracked)
+build/
+dist/
+*.egg-info/
+*.whl
 
-__pycache__
+# Local training logs and recovery artifacts: keep on disk, do not commit
+logs/
+runs/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+events.out.tfevents.*
+
+# Generated example figures and numeric results
+/examples/output/
+/output/
+
+# Editor settings
+.vscode/
+.idea/
+
+# Keep documentation and data sources: do not globally ignore PNG/PDF/TEX/JSON/NPY

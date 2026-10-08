@@ -31,10 +31,17 @@ dependencies = ["numpy>=1.22"]
 sparse = ["scipy>=1.8"]
 plot = ["matplotlib>=3.5"]
 test = ["pytest>=7"]
-all = ["scipy>=1.8", "matplotlib>=3.5", "pytest>=7"]
+deeplearning = ["torch>=2.0"]
+all = ["scipy>=1.8", "matplotlib>=3.5", "pytest>=7", "torch>=2.0"]
 
 [tool.setuptools.packages.find]
+where = [".."]
 include = ["MosicaFE*"]
+exclude = ["MosicaFE.archive*", "MosicaFE.tests*", "MosicaFE.examples*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+MosicaFE = ["MosicaFE_guidebook.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -233,7 +233,8 @@ def test_interpolate_flux_matches_face_integrals():
         verts = nodes[V.facet_vertices(f)]
         pts, w = simplex_quadrature(verts, order=3)
         vals = np.array([q(p) for p in pts])
-        expect = float(np.sum(w * (vals @ V.topology.normals[f])))
+        normal = V.topology.normals[f]
+        expect = float(np.sum(w * (vals @ (normal / np.linalg.norm(normal)))))
         assert Phi[f] == pytest.approx(expect, rel=1e-10, abs=1e-12)
 
 
