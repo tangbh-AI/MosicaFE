@@ -70,7 +70,8 @@ from ..core.facets import build_facet_topology, local_facets, simplex_element_ar
 from ..core.quadrature import cell_quadrature, simplex_quadrature
 from .base import BaseFESpace
 
-__all__ = ["RT0Space", "rt0_flux_basis", "rt0_mass_matrices"]
+__all__ = ["RT0Space", "rt0_flux_basis", "rt0_mass_matrices",
+           "rt0_permeability_matrices", "rt0_weighted_mass_matrices"]
 
 #: 单元类型别名（与 core.mesh 的约定一致）
 _TRI_ALIASES = ("tri", "triangle", "simplex")
@@ -120,6 +121,118 @@ def rt0_flux_basis(vertices, points) -> np.ndarray:
         raise ValueError(f"vertices 形状应为 (d+1, d)，收到 {v.shape}")
     meas = _simplex_measure(v)
     return (p[:, None, :] - v[None, :, :]) / (d * meas)
+
+
+def rt0_permeability_matrices(K, points, dim: int) -> np.ndarray:
+    """把渗透率统一成 ``(n_points, d, d)`` 的对称正定矩阵数组。
+
+    Parameters
+    ----------
+    K : float | (d,) | (d, d) | callable
+        * 标量：各向同性常数渗透率；
+        * ``(d,)``：与坐标轴一致的对角张量（主渗透率）；
+        * ``(d, d)``：一般对称正定张量（可带非对角项）；
+        * 可调用 ``K(x)``，``x`` 为 ``(n_points, d)``，返回 ``(n_points,)``
+          （标量渗透率场）或 ``(n_points, d, d)``（张量场）。
+    points : (n_points, d) ndarray
+        求值点（单元形心或求积点）。
+    dim : int
+        空间维数。
+
+    Returns
+    -------
+    (n_points, d, d) ndarray，已检查对称正定。
+
+    Examples
+    --------
+    .. code-block:: python
+
+       pts = mesh.cell_centroids()
+       rt0_permeability_matrices(2.5, pts, 2)                    # 标量
+       rt0_permeability_matrices([1.0, 0.01], pts, 2)            # 对角
+       rt0_permeability_matrices([[3, 1], [1, 2]], pts, 2)       # 张量
+       rt0_permeability_matrices(lambda x: 1.0 + x[:, 0], pts, 2)  # 场
+    """
+    pts = np.atleast_2d(np.asarray(points, dtype=float))
+    nq, d = pts.shape
+    if d != int(dim):
+        raise ValueError(f"points 的第二维应为 {dim}，收到 {d}")
+    eye = np.eye(d)[None, :, :]
+    if callable(K):
+        val = np.asarray(K(pts), dtype=float)
+        if val.ndim == 1:
+            Kmat = val[:, None, None] * eye
+        elif val.ndim == 2:                      # 逐点给对角主渗透率
+            Kmat = val[:, :, None] * eye
+        elif val.ndim == 3:
+            Kmat = val
+        else:
+            raise ValueError(
+                f"可调用渗透率应返回 (nq,) 或 (nq,{d},{d})，收到形状 {val.shape}")
+    else:
+        arr = np.asarray(K, dtype=float)
+        if arr.ndim == 0:
+            Kmat = np.full((nq, 1, 1), float(arr)) * eye
+        elif arr.ndim == 1:
+            if arr.size != d:
+                raise ValueError(f"对角渗透率长度应为 {dim}，收到 {arr.size}")
+            Kmat = np.broadcast_to(np.diag(arr)[None, :, :], (nq, d, d)).copy()
+        elif arr.ndim == 2:
+            if arr.shape != (d, d):
+                raise ValueError(f"渗透率张量形状应为 ({d},{d})，收到 {arr.shape}")
+            Kmat = np.broadcast_to(arr, (nq, d, d)).copy()
+        else:
+            raise ValueError(f"无法识别的渗透率形状 {arr.shape}")
+
+    if not np.all(np.isfinite(Kmat)):
+        raise FloatingPointError("渗透率中出现非有限值（NaN/Inf）")
+    lam_min = float(np.min(np.linalg.eigvalsh(Kmat)))
+    if lam_min <= 0.0:
+        raise ValueError(f"渗透率必须对称正定，最小特征值为 {lam_min:.3e}")
+    return Kmat
+
+
+def rt0_weighted_mass_matrices(vertices, W) -> np.ndarray:
+    """批量加权 RT0 质量矩阵 :math:`M_{ij}=\\int_K\\varphi_i^{\\mathsf T}W\\varphi_j`。
+
+    这是 :func:`rt0_mass_matrices` 的加权推广：推导里只用到"对每个自变量线性"，
+    所以把点积换成 :math:`u^{\\mathsf T}Wv` 后公式**逐字成立**
+
+    .. math::
+
+       M_{ij}=\\frac{S_i^{\\mathsf T}WS_j+\\sum_k(a_k-a_i)^{\\mathsf T}W(a_k-a_j)}
+                    {d^2(d+1)(d+2)\\,|K|},
+       \\qquad S_i=\\sum_k(a_k-a_i).
+
+    Parameters
+    ----------
+    vertices : (n_cells, d+1, d) array_like
+    W : (d, d) 或 (n_cells, d, d) array_like
+        对称正定权重矩阵（Darcy 问题里取 :math:`W=K^{-1}`）。
+
+    Returns
+    -------
+    (n_cells, d+1, d+1) ndarray，对称正定。
+    """
+    v = np.asarray(vertices, dtype=float)
+    if v.ndim != 3 or v.shape[1] != v.shape[2] + 1:
+        raise ValueError(f"vertices 形状应为 (n_cells, d+1, d)，收到 {v.shape}")
+    n = v.shape[1]
+    d = v.shape[2]
+    W = np.asarray(W, dtype=float)
+    if W.shape == (d, d):
+        W = np.broadcast_to(W, (v.shape[0], d, d))
+    if W.shape != (v.shape[0], d, d):
+        raise ValueError(f"W 形状应为 ({d},{d}) 或 (n_cells,{d},{d})，收到 {W.shape}")
+
+    meas = _batch_measure(v)
+    S = v.sum(axis=1)[:, None, :] - n * v                 # S[c,i,:] = Σ_k (a_k - a_i)
+    SS = np.einsum("mid,mde,mje->mij", S, W, S)           # S_i^T W S_j
+    D = v[:, :, None, :] - v[:, None, :, :]               # D[c,k,i,:] = a_k - a_i
+    G = np.einsum("mkid,mde,mkje->mij", D, W, D)          # Σ_k (a_k-a_i)^T W (a_k-a_j)
+    factor = d * d * (d + 1) * (d + 2)
+    M = (SS + G) / (factor * meas[:, None, None])
+    return 0.5 * (M + np.swapaxes(M, -1, -2))
 
 
 def rt0_mass_matrices(vertices, lumped: bool = False) -> np.ndarray:
@@ -367,6 +480,62 @@ class RT0Space(BaseFESpace):
         M = from_triplets(rows, cols, vals.ravel(), (self.n_flux, self.n_flux))
         self._mass_cache[lumped] = M
         return M
+
+    def weighted_flux_mass_matrix(self, K, mode: str = "cell",
+                                  quadrature_order: int = 6):
+        """(Φ,Φ) 块 ``M_ij = ∫_Ω (K^{-1}φ_i)·φ_j``，形状 ``(n_flux, n_flux)``。
+
+        这是 Darcy 渗流（:class:`~MosicaFE.physics.darcy.DarcyProblem`）需要的矩阵；
+        :meth:`flux_mass_matrix` 是它在 :math:`K=I` 时的特例。
+
+        Parameters
+        ----------
+        K : float | (d,) | (d, d) | callable
+            渗透率，含义见 :func:`rt0_permeability_matrices`。
+        mode : {"cell", "quad"}
+            * ``"cell"``（默认）：每个单元取一个常数 :math:`W_c=K(x_c)^{-1}`，
+              用**精确闭式**（:func:`rt0_weighted_mass_matrices`）。
+              分片常数渗透率时结果精确，光滑 :math:`K` 时误差 :math:`O(h^2)`。
+            * ``"quad"``：在求积点逐点取 :math:`K(x_q)^{-1}`，光滑 :math:`K` 更准，
+              代价是每个单元多一次求积。
+        quadrature_order : int
+            ``mode="quad"`` 时的求积阶。
+
+        Returns
+        -------
+        ``(n_flux, n_flux)`` 的 CSR 稀疏矩阵（无 scipy 时为稠密 ndarray）。
+
+        Examples
+        --------
+        .. code-block:: python
+
+           V = FESpace.rt0(mesh)
+           A = V.weighted_flux_mass_matrix(2.5)                 # 各向同性
+           A = V.weighted_flux_mass_matrix([[3, 1], [1, 2]])    # 各向异性
+           A = V.weighted_flux_mass_matrix(lambda x: 1.0 + x[:, 0])   # 变系数
+        """
+        mode = str(mode).lower()
+        d = self.mesh.dim
+        n = d + 1
+        if mode == "cell":
+            W = np.linalg.inv(
+                rt0_permeability_matrices(K, self.mesh.cell_centroids(), d))
+            Mloc = rt0_weighted_mass_matrices(self._cell_vertices, W)
+        elif mode == "quad":
+            Mloc = np.empty((self.mesh.n_cells, n, n))
+            for c in range(self.mesh.n_cells):
+                pts, w = cell_quadrature(self.mesh, c, int(quadrature_order))
+                phi = rt0_flux_basis(self._cell_vertices[c], pts)      # (nq,n,d)
+                Wq = np.linalg.inv(rt0_permeability_matrices(K, pts, d))
+                Mloc[c] = np.einsum("q,qid,qde,qje->ij", w, phi, Wq, phi)
+        else:
+            raise ValueError(f"mode 只能是 'cell' 或 'quad'，收到 {mode!r}")
+        sig = self._facet_signs
+        vals = Mloc * sig[:, :, None] * sig[:, None, :]
+        fid = self._cell_facet_dofs
+        rows = np.repeat(fid, n, axis=1).ravel()
+        cols = np.tile(fid, (1, n)).ravel()
+        return from_triplets(rows, cols, vals.ravel(), (self.n_flux, self.n_flux))
 
     def divergence_matrix(self):
         """(P,Φ) 块 ``B[K,i] = ∫_K ∇·φ_i = σ_{K,i}``，形状 ``(n_pressure, n_flux)``。

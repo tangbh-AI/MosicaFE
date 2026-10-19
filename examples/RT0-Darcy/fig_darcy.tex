@@ -1,0 +1,37 @@
+% !TEX program = xelatex
+% 由 rt0_tools.write_pgfplots 自动生成
+\documentclass[border=8pt]{standalone}
+\usepackage{ctex}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\begin{document}
+\begin{tikzpicture}
+\begin{loglogaxis}[
+  width=13cm, height=9cm,
+  table/col sep=comma,
+  xlabel={$h$}, ylabel={误差},
+  title={二维 Darcy 方程 RT0-P0 混合元收敛阶},
+  grid=both, major grid style={opacity=0.35}, minor grid style={opacity=0.15},
+  legend pos=south west, legend cell align=left,
+  tick label style={font=\small}, label style={font=\small},
+  title style={font=\small},
+]
+  \addplot[mark=*,mark size=1.8pt,thick] table[x=h,y=iso_p] {data_darcy.csv};
+  \addlegendentry{$K=I$: $\|p-p_h\|_{L^2}$}
+  \addplot[mark=*,mark size=1.8pt,thick] table[x=h,y=aniso_p] {data_darcy.csv};
+  \addlegendentry{常值各向异性: $\|p-p_h\|_{L^2}$}
+  \addplot[mark=*,mark size=1.8pt,thick] table[x=h,y=var_p] {data_darcy.csv};
+  \addlegendentry{光滑变系数: $\|p-p_h\|_{L^2}$}
+  \addplot[mark=*,mark size=1.8pt,thick] table[x=h,y=layer_p] {data_darcy.csv};
+  \addlegendentry{高对比分层（仅 $p$）: $\|p-p_h\|_{L^2}$}
+  \addplot[mark=*,mark size=1.8pt,thick] table[x=h,y=iso_q] {data_darcy.csv};
+  \addlegendentry{$K=I$: $\|q-q_h\|_{L^2}$}
+  \addplot[mark=*,mark size=1.8pt,thick] table[x=h,y=aniso_q] {data_darcy.csv};
+  \addlegendentry{常值各向异性: $\|q-q_h\|_{L^2}$}
+  \addplot[mark=*,mark size=1.8pt,thick] table[x=h,y=var_q] {data_darcy.csv};
+  \addlegendentry{光滑变系数: $\|q-q_h\|_{L^2}$}
+  \addplot[black,dashed,thick,mark=none] table[x=h,y=ref] {data_darcy.csv};
+  \addlegendentry{$O(h^{1})$ 参考斜率}
+\end{loglogaxis}
+\end{tikzpicture}
+\end{document}
