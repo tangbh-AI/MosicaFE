@@ -28,14 +28,6 @@
    from MosicaFE import Mesh, solve_poisson
    u = solve_poisson(Mesh.rectangle(nx=32, ny=32), element="VEM", f=source)
 
-换方程同样只改一行——内置方程有 ``poisson`` / ``reaction_diffusion`` /
-``helmholtz`` / ``mixed_poisson``：
-
-.. code-block:: python
-
-   from MosicaFE import Mesh, solve_helmholtz
-   u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=source, k=1.0)
-
 模块结构（与 guidebook 第 1.4 节一致）：
 
 ``core``        网格、面拓扑、求积规则、几何工具
@@ -52,8 +44,8 @@ FEM、VEM、RT0 三类元都是库自身的实现：RT0×P0 的单元基函数�
 
 from __future__ import annotations
 
-from .api import ELEMENT_ALIASES, make_space, resolve_element, run, solve_poisson
-from .api import solve_helmholtz
+from .api import (ELEMENT_ALIASES, make_space, resolve_element, run,
+                  solve_conduction, solve_darcy, solve_poisson)
 from .core.facets import FacetTopology, build_facet_topology
 from .core.mesh import Mesh
 from .core.quadrature import (
@@ -63,7 +55,8 @@ from .core.quadrature import (
     simplex_quadrature,
 )
 from .physics.base import BasePhysics
-from .physics.helmholtz import HelmholtzProblem
+from .physics.conduction import ConductionProblem
+from .physics.darcy import DarcyProblem
 from .physics.mixed_poisson import MixedPoissonProblem
 from .physics.poisson import PoissonProblem
 from .physics.reaction_diffusion import ReactionDiffusionProblem
@@ -88,7 +81,8 @@ from .solvers.linear import ConvergenceError, Solver
 from .spaces.base import BaseFESpace
 from .spaces.factory import FESpace
 from .spaces.lagrange import LagrangeSpace
-from .spaces.rt0 import RT0Space, rt0_flux_basis, rt0_mass_matrices
+from .spaces.rt0 import (RT0Space, rt0_flux_basis, rt0_mass_matrices,
+                         rt0_permeability_matrices, rt0_weighted_mass_matrices)
 from .spaces.vem import VEMSpace
 
 __version__ = "1.0.0"
@@ -112,12 +106,15 @@ __all__ = [
     "RT0Space",
     "rt0_flux_basis",
     "rt0_mass_matrices",
+    "rt0_permeability_matrices",
+    "rt0_weighted_mass_matrices",
     # physics
     "BasePhysics",
     "PoissonProblem",
     "MixedPoissonProblem",
+    "DarcyProblem",
+    "ConductionProblem",
     "ReactionDiffusionProblem",
-    "HelmholtzProblem",
     "register_problem",
     "get_problem_class",
     "available_problems",
@@ -141,7 +138,8 @@ __all__ = [
     "compare_solutions",
     # api
     "solve_poisson",
-    "solve_helmholtz",
+    "solve_darcy",
+    "solve_conduction",
     "run",
     "make_space",
     "resolve_element",

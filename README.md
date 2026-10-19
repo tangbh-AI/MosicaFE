@@ -13,16 +13,6 @@ source = lambda x: 2 * np.pi**2 * np.sin(np.pi*x[0]) * np.sin(np.pi*x[1])
 u = solve_poisson(Mesh.rectangle(nx=32, ny=32), element="P2", f=source)
 ```
 
-换一门方程同样只改一行（内置方程：`poisson` / `reaction_diffusion` /
-`helmholtz` / `mixed_poisson`）：
-
-```python
-from MosicaFE import Mesh, solve_helmholtz
-
-source = lambda x: (2 * np.pi**2 - 1.0) * np.sin(np.pi*x[0]) * np.sin(np.pi*x[1])
-u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=source, k=1.0)
-```
-
 ---
 
 ## 目录
@@ -32,7 +22,6 @@ u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=source, k=1.0)
 * [可选的"元"](#可选的元)
 * [完整的调用方式](#完整的调用方式)
 * [RT0 混合元](#rt0-混合元)
-* [亥姆霍兹方程](#亥姆霍兹方程)
 * [误差与收敛性](#误差与收敛性)
 * [可视化](#可视化)
 * [扩展到其它 PDE](#扩展到其它-pde)
@@ -101,16 +90,6 @@ V = FESpace.rt0(mesh)        # RT0×P0 混合元（此时解是 (Q, P)）
 V = FESpace.lagrange(mesh, degree=1)
 ```
 
-**换一门方程，同样只改一行**（内置方程：`poisson` / `helmholtz` /
-`reaction_diffusion` / `mixed_poisson`）
-
-```python
-from MosicaFE import HelmholtzProblem, solve_helmholtz
-
-u = solve_helmholtz(mesh, element="P2", f=source, k=1.0)         # 一行流
-u = HelmholtzProblem(V, f=source, g=lambda x: 0.0, k=1.0).solve()  # 分步写法
-```
-
 ---
 
 ## 可选的"元"
@@ -168,15 +147,13 @@ u = problem.solve(method="cg")     # "auto" / "direct" / "cg" / "gmres" / "bicgs
 ### 方程
 
 ```python
-PoissonProblem(V, f=..., g=..., kappa=1.0)                # -∇·(κ∇u) = f
+PoissonProblem(V, f=..., g=..., kappa=1.0)               # -∇·(κ∇u) = f
 ReactionDiffusionProblem(V, f=..., reaction_coeff=c)      # -Δu + c u = f
-HelmholtzProblem(V, f=..., g=..., k=1.0, kappa=1.0)       # -∇·(κ∇u) - k²u = f
-MixedPoissonProblem(V_rt0, f=...)                         # RT0 混合形式
+MixedPoissonProblem(V_rt0, f=...)                         # RT0 混合形式（K=I）
+DarcyProblem(V_rt0, f=..., K=2.5, bc=...)                 # RT0 混合形式的 Darcy 渗流
+ConductionProblem(V_rt0, g=..., sigma=2.0, bc=...,
+                  contact=...)                            # 定常电流场（欧姆定律 + 接触电阻）
 ```
-
-也可以按名字建方程：`create_problem("helmholtz", V, f=..., k=2.0)`、
-`run("helmholtz", mesh, element="P2", f=..., k=2.0)`、
-`available_problems()`。
 
 ---
 
@@ -219,51 +196,100 @@ f = V.pressure_load_vector(src) # (P,)   ∫_K f
 也可用 `V.interpolate_pressure(p)` / `V.interpolate_flux(q)`、
 `V.evaluate_flux(cell, Q, points)`、`V.locate_cell(x)` 等原生工具。
 
----
+### Darcy 渗流（内置）
 
-## 亥姆霍兹方程
-
-时谐波的模型问题（常数波数 $k$、常数扩散系数 $\kappa$）：
-
-$$\nabla\cdot(\kappa\nabla u) - k^2u = f,\qquad u=g\ \text{on}\ \partial\Omega$$
-
-它就是"刚度矩阵 $-$ $k^2\times$ 质量矩阵"，与 Poisson 完全共用一套元、求解器和后处理：
+达西定律 + 质量守恒的一阶系统，渗透率可以是标量、对角、一般对称正定张量或变系数：
 
 ```python
-import numpy as np
-from MosicaFE import FESpace, HelmholtzProblem, Mesh, plot_solution, solve_helmholtz
+from MosicaFE import FESpace, Mesh, DarcyProblem
 
-k = 1.0
-exact = lambda x: np.sin(np.pi*x[0]) * np.sin(np.pi*x[1])
-source = lambda x: (2*np.pi**2 - k**2) * exact(x)
-
-# 一行流
-u = solve_helmholtz(Mesh.rectangle(nx=32, ny=32), element="P2", f=source, k=k)
-
-# 分步写法（选网格 → 选元 → 选求解器 → 选可视化）
 mesh = Mesh.rectangle(nx=32, ny=32)
-V = FESpace.lagrange(mesh, degree=2)          # 换成 FESpace.vem(mesh) 也行
-problem = HelmholtzProblem(V, f=source, g=lambda x: 0.0, k=k)
-u = problem.solve(method="direct")
-print(problem.compute_errors(u, exact))
-plot_solution(u, mesh, V, filename="helmholtz.png")
+V = FESpace.rt0(mesh)
+
+# 上下不透水、左右定压 p=1 / p=0，渗透率 2.5 ⇒ 精确解 q=(2.5, 0)
+bc = lambda mid, n: "D" if (mid[0] < 1e-12 or mid[0] > 1 - 1e-12) else "N"
+problem = DarcyProblem(V, f=lambda x: 0.0, g=lambda x: 1.0 - x[:, 0], K=2.5, bc=bc)
+Q, P = problem.solve()
+print(problem.check_conservation())      # 逐单元守恒偏差
+
+# 也可以一行调用
+from MosicaFE import solve_darcy
+Q, P = solve_darcy(mesh, f=src, K=[[3.0, 1.0], [1.0, 2.0]])
 ```
 
-要点：
+与 `MixedPoissonProblem` 相比只有两处不同：
 
-* **低频就是"不共振"**：$k^2$ 小于 $-\Delta$ 的 Dirichlet 第一特征值
-  $\lambda_1$ 时，矩阵 $A=\kappa K-k^2M$ 对称正定，解存在唯一。
-  单位正方形上 $\lambda_1=2\pi^2\approx19.74$，即 $k<4.443$；
-  实测离散判据 $k^2/\lambda_{1,h}$（P2、32×32）为 $0.0507$。
-  $k^2>\lambda_1$ 后矩阵对称**不定**（实测 $k=5$ 时最小特征值变负），
-  要用 `method="direct"` 或 `"minres"`，误差也会被放大。
-* **网格要分辨波**：需要 $kh\lesssim1$（实测 $k=1$、$n=4\ldots32$ 对应
-  $kh=0.25\ldots0.031$），否则看到的是污染（色散）误差而不是收敛阶。
-* `k` 接受**实常数**（复数波数需要复数求解器，库会明确报错）；
-  `-Δu + k²u = f` 这一支（屏蔽 Poisson 方程）请直接用
-  `ReactionDiffusionProblem(..., reaction_coeff=k**2)`。
-* RT0×P0 是混合格式，目前**没有**亥姆霍兹的实现，
-  `solve_helmholtz(..., element="RT0")` 会明确拒绝而不是静默算错。
+1. **通量质量矩阵带 `K^{-1}` 权重** `A_ij = ∫ (K^{-1}φ_i)·φ_j`，
+   由空间层的 `V.weighted_flux_mass_matrix(K)` 提供（`K=I` 时与 `flux_mass_matrix()` 逐位相同）；
+   两种组装方式：`mode="cell"`（每单元常数 `K`，**精确闭式**，分片常数渗透率时无误差）
+   与 `mode="quad"`（求积点逐点取值，光滑 `K` 更准）；
+2. **支持本质（流量）边界条件**：`bc(mid, n_out)` 返回
+   `"D"`（压力 Dirichlet，可为非齐次）/ `"N"`（不透水 `q·n=0`）/
+   `("flux", gN)`（给定流量），压力条件仍走右端（自然边界条件）。
+
+鞍点求解与 `MixedPoissonProblem` 同风格（`"schur"` 密凝聚、`"schur_cg"` 稀疏 LU+CG、
+`"direct"`/`"minres"` 等），纯 Neumann 时自动取零均值并拦下会解奇异矩阵的直接法。
+
+### 定常电流场（内置）
+
+欧姆定律 + 电荷守恒，与 Darcy **完全同构**（$\sigma\leftrightarrow K$、$\varphi\leftrightarrow p$、
+$\boldsymbol J\leftrightarrow\boldsymbol q$），所以直接复用同一套鞍点装配：
+
+$$
+\boldsymbol J=-\sigma\nabla\varphi,\qquad \nabla\cdot\boldsymbol J=f .
+$$
+
+```python
+from MosicaFE import FESpace, Mesh, ConductionProblem
+
+mesh = Mesh.rectangle(nx=32, ny=32)
+V = FESpace.rt0(mesh)
+
+# 左右电极 1 V / 0 V，上下绝缘，电导率 σ=2 ⇒ J=(2,0)，R=0.5
+bc = lambda mid, n: "D" if (mid[0] < 1e-12 or mid[0] > 1 - 1e-12) else "N"
+problem = ConductionProblem(V, g=lambda x: 1.0 - x[:, 0], sigma=2.0, bc=bc)
+J, phi = problem.solve()
+
+print(problem.total_current(lambda m: m[0] > 1 - 1e-12))   # 总电流 I = 2
+print(problem.resistance(1.0, lambda m: m[0] > 1 - 1e-12)) # 电阻  R = 0.5
+print(problem.joule_heating())                             # 焦耳热 P = Δφ·I = 2
+```
+
+**接触电阻**（电极/材料界面的面接触电阻率 $R_c$）在混合格式里是对角修正：
+由分部积分
+
+$$
+(\sigma^{-1}\boldsymbol J,\boldsymbol v)-(\varphi,\nabla\cdot\boldsymbol v)
++\langle\llbracket\varphi\rrbracket,\boldsymbol v\cdot\boldsymbol n\rangle
++\langle\varphi,\boldsymbol v\cdot\boldsymbol n\rangle_{\partial\Omega}=0,
+$$
+
+标准方法把 $\llbracket\varphi\rrbracket$ 当 0（电势连续）；界面有接触电阻时
+$\llbracket\varphi\rrbracket=R_c\,\boldsymbol J\cdot\boldsymbol n$，于是
+
+$$
+\bigl\langle R_c(\boldsymbol J\cdot\boldsymbol n),v_f\cdot\boldsymbol n\bigr\rangle
+=\frac{R_c}{|f|}\Phi_f
+\quad\Longrightarrow\quad
+A_{ff}\leftarrow A_{ff}+\frac{R_c(f)}{|f|}.
+$$
+
+```python
+# 在 x=0.5 的界面上加 R_c = 0.5（二维按单位厚度）：总电阻 = 1 + 0.5 = 1.5
+problem = ConductionProblem(V, g=lambda x: 1.0 - x[:, 0], sigma=1.0, bc=bc,
+                            contact=lambda mid: 0.5 if abs(mid[0] - 0.5) < 1e-12 else None)
+J, phi = problem.solve()
+print(problem.resistance(1.0, lambda m: m[0] > 1 - 1e-12))  # 1.5
+```
+
+边界条件与 Darcy 相同：`"D"` 电极电势（自然边界，可为非齐次）、`"N"` 绝缘
+（$\boldsymbol J\cdot\boldsymbol n=0$）、`("flux", gN)` 注入电流密度（本质边界）。
+也可一行调用 `solve_conduction(mesh, g=..., sigma=2.0, bc=...)`。
+
+验证（`RT0-Conduction/conduction_rt0.py`）：均质条形 $I=2,R=0.5,P=2$ 精确；
+串联分层 $R=\sum L_i/\sigma_i$ 相对误差 $7\times10^{-15}$；接触电阻 $R=1.5$、
+电势跳变 $=R_c I$ 精确到 $10^{-10}$；$\sigma=K$ 时与 `DarcyProblem` 逐位同解。
+
 
 ---
 
@@ -320,33 +346,24 @@ plot_solution(u, mesh, V, title="VEM", filename="vem.png", show=False)
 空间层已经把单元矩阵算好了，物理层只需要做"矩阵的线性组合"：
 
 ```python
-import numpy as np
 from MosicaFE.physics.base import BasePhysics
 from MosicaFE.physics.registry import register_problem
 
-@register_problem("point_source_poisson")
-class PointSourcePoissonProblem(BasePhysics):
-    """-Δu = f + δ(x - x0)（点源没法写成 f(x)，所以在 assemble 里自己加一项）"""
-    def __init__(self, space, x0, f=None, g=None, **kw):
+@register_problem("helmholtz")
+class HelmholtzProblem(BasePhysics):
+    """-Δu - k²u = f"""
+    def __init__(self, space, f=None, g=None, k=1.0, **kw):
         super().__init__(space, f=f, g=g, **kw)
-        self.x0 = np.asarray(x0, dtype=float)
+        self.k = k
 
     def assemble(self):
-        A = self.space.stiffness_matrix()
+        A = self.space.stiffness_matrix() - self.k**2 * self.space.mass_matrix()
         b = self.space.load_vector(self.f)
-        # 对 P1/Q1/VEM 这类顶点型空间，φ_i(x0) = δ_ij（x0 取节点时），
-        # 于是 ∫δ(x-x0)φ_i dx 就是"把 1 加到该自由度"。
-        dist = np.linalg.norm(self.space.dof_coords - self.x0, axis=1)
-        b[int(np.argmin(dist))] += 1.0
         return self.apply_boundary_conditions(A, b)
 ```
 
-然后 `create_problem("point_source_poisson", V, x0=(0.5, 0.5), f=zero, g=zero)` 或
-`MosicaFE.run("point_source_poisson", mesh, element="P1", x0=(0.5, 0.5))` 就能用了
-（完整可运行版本见 `examples/custom_pde.py`）。
-
-内置的 `HelmholtzProblem` 就是同一模式的另一个例子：它只比 Poisson 多一行
-`A = stiffness_matrix() - k**2 * mass_matrix()`。
+然后 `create_problem("helmholtz", V, f=..., k=2.0)` 或
+`MosicaFE.run("helmholtz", mesh, element="VEM", f=..., k=2.0)` 就能用了。
 
 可用的空间原语：`stiffness_matrix()`、`mass_matrix()`、`load_vector(f)`、
 `boundary_dofs()`、`interpolate(f)`、`evaluate(cell, u, points)`、
@@ -364,8 +381,7 @@ class PointSourcePoissonProblem(BasePhysics):
 MosicaFE/
   core/        网格（mesh.py）、面拓扑（facets.py）、求积（quadrature.py）、几何工具
   spaces/      离散空间（Lagrange / VEM / RT0）与工厂 FESpace
-  physics/     PDE 弱形式与组装
-               （Poisson / Helmholtz / ReactionDiffusion / MixedPoisson + 注册表）
+  physics/     PDE 弱形式与组装（Poisson / MixedPoisson / Darcy / Conduction / ReactionDiffusion + 注册表）
   solvers/     线性求解器
   postprocess/ 误差分析（含混合格式）、收敛性研究、可视化
   examples/    可运行示例
@@ -395,20 +411,8 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 | Q1 / 六面体 | 2.01 | 1.00 |
 | VEM / 六面体 | 1.97 | 0.97 |
 | RT0-P0 / 三角（压力、通量） | 1.00 | 1.00 |
-
-亥姆霍兹方程 `-Δu - k²u = f`（$k=1$ 常数波数，制造解同 `u = sin(πx)sin(πy)`，
-由 `tests/run_checks.py` 的 `check_helmholtz()` 复现）与 Poisson **同阶**：
-
-| 元 / 网格 | L2 | H1 |
-| --- | --- | --- |
-| P1 / 三角 | 1.98 | 0.99 |
-| P2 / 三角 | 3.01 | 1.99 |
-| Q1 / 四边形 | 2.00 | 1.00 |
-| VEM / 三角 | 1.98 | 0.99 |
-
-同时验证低频判据：离散第一特征值 $\lambda_{1,h}$（内点上 $Kv=\lambda Mv$ 的最小特征值）
-实测 P1/VEM 为 19.7868、P2 为 19.7394，均从上方逼近理论值 $2\pi^2=19.7392$，
-故 $k=1$ 时 $k^2/\lambda_{1,h}=0.0507$（远小于 1，远离共振）。
+| RT0-P0 / Darcy（压力、通量；各向异性 K） | 1.00 | 1.00 |
+| RT0-P0 / 电流场（电阻、接触电阻；与 Darcy 逐位同解） | 精确 | — |
 
 一条命令复现：
 
@@ -423,13 +427,13 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 
 * Lagrange 只实现到 2 次（P2 / Q2）；更高次的接入点在 `spaces/reference.py`。
 * VEM 只实现 k=1（每顶点一个自由度），且 3D 通用多面体需要显式给出面。
-* RT0 只支持齐次 Dirichlet（在混合格式里是自然边界条件）；
-  网格必须是 `H(div)` 协调的单纯形剖分（三角形 / 四面体），
+* RT0 的网格必须是 `H(div)` 协调的单纯形剖分（三角形 / 四面体），
   不协调的剖分会被 `core/facets.py` 直接拦下而不是静默算错。
-* `HelmholtzProblem` 的 `k`、`kappa` 都只支持**实常数**（复波数/吸收介质需要
-  复数求解器，构造时会明确报错）；`-Δu + k²u = f` 请用
-  `ReactionDiffusionProblem(reaction_coeff=k**2)`。
-* 亥姆霍兹没有混合（RT0×P0）实现，`solve_helmholtz(element="RT0")` 会明确拒绝。
+* `MixedPoissonProblem` 只支持**齐次** Dirichlet（混合格式里的自然边界条件）；
+  需要非齐次压力、不透水或给定流量边界时用 `DarcyProblem`。
+* `DarcyProblem` 的渗透率按**单元常数**（`mode="cell"`）或**求积点取值**（`mode="quad"`）
+  离散，不支持跨越单元间断的复杂分片函数解析积分；
+  纯 Neumann 时它只能走 Schur 路径（压力差一个常数，自动取零均值）。
 * `VEMSpace(stabilization="none")` 仅供诊断，纯投影项是奇异的，不要用于求解。
 * `Mesh.pentagon` 的单元含 180° 内角（退化多边形），实测收敛阶正常，
   但严格来说在 VEM 的星形正则性假设之外。
@@ -441,3 +445,7 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 ## 许可
 
 MosicaFE 按 MIT 发布，全部代码都是库自身实现。
+
+RT0×P0 部分（`core/facets.py`、`spaces/rt0.py`、`physics/mixed_poisson.py`、
+`physics/darcy.py`）由作者自己的 `rt0fem` 程序（`D:\mosica\RT0`，MIT）重写并入本库，
+不再以内嵌第三方包的形式存在；原始 `rt0fem` 包仍可独立使用。
