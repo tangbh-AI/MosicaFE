@@ -6,9 +6,8 @@
 * ``"H1"`` —— :math:`|u-u_h|_{H^1(\\Omega)}`（半范数），需要精确梯度
 * ``"Linf"`` —— :math:`\\|u-u_h\\|_{L^\\infty}`，取自由度点与求积点的最大值
 
-关于 VEM：虚拟元没有显式基函数，因此 :meth:`VEMSpace.evaluate` 用的是
-**顶点自由度上的线性最小二乘重构**（与 :math:`u_h` 同阶）。
-这样算出的收敛阶与真实 :math:`u_h` 是一致的，具体数值见 progress/VERIFICATION.md。
+关于 VEM：虚拟元没有显式基函数。k=1 使用顶点值的线性最小二乘重构；
+k>=2 使用 k 次能量投影。这里报告可计算的投影误差，而非虚拟函数本体的精确范数。
 
 关于 RT0×P0：压力是分片常数、通量是显式的向量多项式，两者都可以逐点求值，
 因此混合格式的误差范数 :func:`mixed_error_norms` 与 H1 协调空间用的是同一套
@@ -99,8 +98,16 @@ def compute_errors(problem, solution, exact, exact_grad=None, quad_order=None):
     try:
         if exact is None:
             raise RuntimeError("no exact solution given")
-        ud = _eval_scalar(space, exact, space.dof_coords)
-        linf = max(linf, float(np.max(np.abs(u - ud))) if u.size else 0.0)
+        mask = np.ones(len(u), dtype=bool)
+        if getattr(space, 'family', '') == 'vem' and space.degree > 1:
+            # Moment DOFs are integrals; comparing them with point values is invalid.
+            mask[:] = False
+            if mesh.dim == 3:
+                mask[space._point_dofs] = True
+            else:
+                mask = ~space.dof_is_interior
+        ud = _eval_scalar(space, exact, space.dof_coords[mask])
+        linf = max(linf, float(np.max(np.abs(u[mask] - ud))) if ud.size else 0.0)
     except Exception:
         pass
 

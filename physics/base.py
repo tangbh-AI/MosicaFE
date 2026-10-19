@@ -59,6 +59,8 @@ class BasePhysics(ABC):
     def apply_boundary_conditions(self, A, b, values=None):
         """强加 Dirichlet 条件 ``u = g``（默认齐次）。"""
         dofs = self.boundary_dofs
+        if values is None and hasattr(self.space, "boundary_values"):
+            values = self.space.boundary_values(self.g, dofs)
         if values is None:
             values = self.space._evaluate_function(
                 self.g, self.space.dof_coords[dofs]

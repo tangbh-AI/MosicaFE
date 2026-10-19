@@ -121,7 +121,7 @@ u = HelmholtzProblem(V, f=source, g=lambda x: 0.0, k=1.0).solve()  # 分步写�
 | `"P2"` | 二次 Lagrange | 三角形 / 四面体 | 3 / 2 |
 | `"Q1"` | 双线性 Lagrange | 四边形 / 六面体 | 2 / 1 |
 | `"Q2"` | 双二次 Lagrange | 四边形 / 六面体 | 3 / 2 |
-| `"VEM"` | 一次虚拟元 | **任意**多边形 / 多面体 | 2 / 1 |
+| `"VEM"` / `"VEMk"` | k 次协调虚拟元（默认 k=1） | 多边形 / 多面体 | k+1 / k |
 | `"RT0"` | RT0×P0 混合元 | 三角形 / 四面体 | 1 / 1（压力 / 通量） |
 
 网格由 `MosicaFE.Mesh` 生成：
@@ -422,7 +422,8 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 ## 已知限制
 
 * Lagrange 只实现到 2 次（P2 / Q2）；更高次的接入点在 `spaces/reference.py`。
-* VEM 只实现 k=1（每顶点一个自由度），且 3D 通用多面体需要显式给出面。
+* VEM 支持二维、三维 k>=1；高阶增加边节点、面矩（3D）与单元矩。
+  3D 通用多面体仍需要显式给出平面面的有序顶点表。
 * RT0 只支持齐次 Dirichlet（在混合格式里是自然边界条件）；
   网格必须是 `H(div)` 协调的单纯形剖分（三角形 / 四面体），
   不协调的剖分会被 `core/facets.py` 直接拦下而不是静默算错。
@@ -433,8 +434,26 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 * `VEMSpace(stabilization="none")` 仅供诊断，纯投影项是奇异的，不要用于求解。
 * `Mesh.pentagon` 的单元含 180° 内角（退化多边形），实测收敛阶正常，
   但严格来说在 VEM 的星形正则性假设之外。
-* 误差范数中，VEM 的解函数用"顶点自由度上的线性最小二乘重构"代替
-  （虚拟元没有显式基函数），收敛阶与 `u_h` 一致。
+* VEM 没有显式内部基函数：k=1 使用线性最小二乘重构，k>=2 使用 k 次能量投影。
+  报告的是可计算的投影误差；Linf 为采样最大误差，矩自由度不与点值比较。
+
+## 高阶 VEM：二维与三维 Poisson / Helmholtz
+
+```python
+V = FESpace.vem(mesh, degree=3)
+u = PoissonProblem(V, f=source, g=zero).solve(method="direct")
+# 同一空间直接用于 Helmholtz；此处 k 是波数，degree 才是离散次数。
+u = HelmholtzProblem(V, f=helmholtz_source, g=zero, k=1.0).solve(method="direct")
+```
+
+运行 `python examples/vem_high_order_demo.py`，会使用当前源码目录，保持已有正弦算例、
+区域与边界数据，计算 k=2、3 的二维三角形和三维四面体网格加密结果。
+输出包含精确解/数值解/绝对误差云图、三维内部切面云图、收敛曲线、CSV 和 NPZ。
+代码分层与现有工厂、物理问题、求解接口保持一致。
+
+详见 [运行报告与代码说明](examples/output/vem_high_order/报告.md)。
+运行 `python tests/run_tests.py` 可检查原有功能及新增投影一致性、载荷/质量一致性、
+非零边界 patch test、面矩共享与高阶积分；投影检验覆盖到 k=4。
 
 ---
 

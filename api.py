@@ -64,6 +64,8 @@ ELEMENT_ALIASES = {
     "FEM": ("lagrange", None),
     "VEM": ("vem", 1),
     "VEM1": ("vem", 1),
+    "VEM2": ("vem", 2),
+    "VEM3": ("vem", 3),
     "VIRTUAL": ("vem", 1),
     "RT0": ("rt0", 1),
     "RT0-P0": ("rt0", 1),
@@ -77,7 +79,8 @@ def resolve_element(element, degree: int = None):
     if key in ELEMENT_ALIASES:
         family, default_degree = ELEMENT_ALIASES[key]
     elif key.startswith("VEM"):
-        family, default_degree = "vem", 1
+        tail = key[3:]
+        family, default_degree = "vem", (int(tail) if tail.isdigit() else 1)
     elif key.startswith("RT0") or key.startswith("MIXED"):
         family, default_degree = "rt0", 1
     elif key[:1] in ("P", "Q") and key[1:].isdigit():

@@ -44,7 +44,7 @@ class FESpace:
 
     @staticmethod
     def vem(mesh, degree: int = 1, **kwargs) -> VEMSpace:
-        """虚拟元空间（k=1，任意多边形 / 多面体）。"""
+        """任意阶 k>=1 协调虚拟元空间（二维多边形 / 三维多面体）。"""
         return VEMSpace(mesh, degree=degree, **kwargs)
 
     @staticmethod

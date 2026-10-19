@@ -23,6 +23,9 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(os.path.dirname(_HERE))
 sys.path.insert(0, _ROOT)
 sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.dirname(_HERE))
+from _source_import import load_local
+load_local()
 
 # 用 minipytest 冒充 pytest（本环境没装 pytest）
 try:

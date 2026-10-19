@@ -156,6 +156,8 @@ class QuadratureRule:
 # ---------------------------------------------------------------------------
 def _triangle_rule(order: int):
     """参考三角形（面积 1/2）上的求积规则，精确到给定 total degree。"""
+    if order > 4:
+        return _duffy_rule(2, order)
     if order <= 1:
         pts = [[1 / 3, 1 / 3]]
         w = [0.5]
@@ -184,6 +186,8 @@ def _triangle_rule(order: int):
 
 def _tet_rule(order: int):
     """参考四面体（体积 1/6）上的求积规则。"""
+    if order > 3:
+        return _duffy_rule(3, order)
     if order <= 1:
         pts = [[0.25, 0.25, 0.25]]
         w = [1 / 6]
@@ -197,6 +201,17 @@ def _tet_rule(order: int):
                [1 / 6, 0.5, 1 / 6], [1 / 6, 1 / 6, 0.5], [1 / 6, 1 / 6, 1 / 6]]
         w = [-0.8 / 6] + [0.45 / 6] * 4
     return np.array(pts, dtype=float), np.array(w, dtype=float)
+
+
+def _duffy_rule(dim, order):
+    """Positive simplex rule, exact to requested degree (no table truncation)."""
+    n = (int(order) + dim + 1) // 2
+    p, w = _tensor_product(_gauss_legendre_1d(n), dim)
+    if dim == 2:
+        x, y = p.T
+        return np.column_stack((x, (1-x)*y)), w*(1-x)
+    x, y, z = p.T
+    return np.column_stack((x, (1-x)*y, (1-x)*(1-y)*z)), w*(1-x)**2*(1-y)
 
 
 def get_quadrature(element_type: str, order: int = 2) -> QuadratureRule:
@@ -275,6 +290,10 @@ def cell_quadrature(mesh, cell_idx: int, order: int = 3):
     if et in ("interval", "triangle", "quad", "tet", "hex"):
         rule = QuadratureRule.get_quadrature(et, order)
         phys = apply_affine_map(rule.points, coords)
+        if len(coords) == d + 1:
+            # Affine simplex Jacobians are constant at all quadrature points.
+            _, detJ = simplex_jacobian(coords)
+            return phys, rule.weights * abs(detJ)
         weights = np.zeros(rule.n_points)
         for q, xi in enumerate(rule.points):
             _, detJ = compute_jacobian(coords, xi)
@@ -314,9 +333,7 @@ def cell_quadrature(mesh, cell_idx: int, order: int = 3):
     wts = []
     for f in faces:
         fv = [int(i) for i in f]
-        tris = [(fv[0], fv[1], fv[2])]
-        if len(fv) == 4:
-            tris.append((fv[0], fv[2], fv[3]))
+        tris = [(fv[0], fv[i], fv[i+1]) for i in range(1, len(fv)-1)]
         for tri in tris:
             tet = np.array([centroid, coords[tri[0]], coords[tri[1]], coords[tri[2]]])
             J, detJ = simplex_jacobian(tet)
