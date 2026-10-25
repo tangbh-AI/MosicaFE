@@ -59,6 +59,11 @@
 *Mixed Finite Element Methods and Applications*, Springer (2013).
 """
 
+# 模块职责：RT0 通量与分片常数压力空间
+# 每个共享面有一个全局法向通量未知量，每个单元有一个常数压力未知量。
+# 提供通量质量块、散度耦合块和压力载荷；物理层把这些块组合成混合方程，求解后再重构通量。
+
+
 from __future__ import annotations
 
 import math
@@ -101,6 +106,8 @@ def _batch_measure(vertices: np.ndarray) -> np.ndarray:
     return meas
 
 
+# 工作块：计算 RT0 通量基函数
+# 根据单纯形顶点和测度构造向量值基函数，使其面法向积分对应指定自由度；输出将用于通量重构和质量计算。
 def rt0_flux_basis(vertices, points) -> np.ndarray:
     """RT0 基函数值 :math:`\\varphi_i(x)=(x-a_i)/(d|K|)`。
 
@@ -122,6 +129,8 @@ def rt0_flux_basis(vertices, points) -> np.ndarray:
     return (p[:, None, :] - v[None, :, :]) / (d * meas)
 
 
+# 工作块：批量计算 RT0 的局部质量矩阵
+# 每个矩阵条目是两个通量基函数内积的单元积分；使用单纯形几何的闭式关系计算，并按 lumped 选项决定是否采用集中形式。
 def rt0_mass_matrices(vertices, lumped: bool = False) -> np.ndarray:
     """批量 RT0 质量矩阵 :math:`M_{ij}=\\int_K\\varphi_i\\cdot\\varphi_j`。
 
@@ -201,6 +210,7 @@ class RT0Space(BaseFESpace):
     is_mixed = True
 
     def __init__(self, mesh, degree: int = 1, name: str = None, lumped: bool = False):
+        # 核对单纯形几何和最低阶限制，按共享面通量、单元常数压力的布局建立混合空间。
         d = int(mesh.dim)
         et = str(mesh.element_type).lower()
         if d == 2 and et not in _TRI_ALIASES:
@@ -223,6 +233,8 @@ class RT0Space(BaseFESpace):
     # ------------------------------------------------------------------
     # 自由度布局
     # ------------------------------------------------------------------
+    # 工作块：建立自由度的局部与全局对应关系
+    # 遍历单元并登记其几何支撑上的自由度；后续组装依赖这张映射表，把局部计算结果放到正确的全局位置。
     def _build_dof_map(self):
         topo = build_facet_topology(self.mesh)
         self._topology = topo
@@ -254,6 +266,7 @@ class RT0Space(BaseFESpace):
         )
 
     def _build_dof_coordinates(self):
+        # 建立自由度的代表坐标；点自由度位于实际点上，积分矩使用所属实体中心作代表。
         coords = np.zeros((self.n_dofs, self.mesh.dim))
         coords[: self.n_flux] = np.asarray(self.mesh.nodes, dtype=float)[
             self._facet_vertices
@@ -348,6 +361,8 @@ class RT0Space(BaseFESpace):
     # ------------------------------------------------------------------
     # 全局矩阵原语（物理层只做块组合）
     # ------------------------------------------------------------------
+    # 工作块：组装统一定向的全局通量质量块
+    # 先计算每个单元的局部质量矩阵，再给行和列乘面方向符号，最后按共享面编号累加，得到全局通量变量使用的 M。
     def flux_mass_matrix(self, lumped: bool = None):
         """(Φ,Φ) 块 ``M_ij = ∫_K φ_i·φ_j``，形状 ``(n_flux, n_flux)``。
 
@@ -368,6 +383,8 @@ class RT0Space(BaseFESpace):
         self._mass_cache[lumped] = M
         return M
 
+    # 工作块：连接面通量与单元守恒方程
+    # 每个压力自由度对应一个单元；该单元各面通量按外法向符号进入同一行，使矩阵乘法表示单元的净流出量。
     def divergence_matrix(self):
         """(P,Φ) 块 ``B[K,i] = ∫_K ∇·φ_i = σ_{K,i}``，形状 ``(n_pressure, n_flux)``。
 
@@ -385,6 +402,8 @@ class RT0Space(BaseFESpace):
             )
         return self._div_cache
 
+    # 工作块：构造单元守恒方程的右端
+    # 对源项在每个单元内积分；结果每个单元只有一个数，与分片常数压力空间的自由度一一对应。
     def pressure_load_vector(self, f, quadrature_order: int = None) -> np.ndarray:
         """压力载荷 ``∫_K f``，形状 ``(n_pressure,)``。
 
@@ -401,6 +420,8 @@ class RT0Space(BaseFESpace):
     # ------------------------------------------------------------------
     # 插值
     # ------------------------------------------------------------------
+    # 工作块：把已知压力转换为单元常数
+    # 对每个单元求压力平均值，得到该单元的 P0 自由度，用于构造插值或和计算压力进行比较。
     def interpolate_pressure(self, f) -> np.ndarray:
         """把标量函数投影到 P0：返回每个单元的平均值 ``∫_K f / |K|``。"""
         out = np.zeros(self.n_pressure)
@@ -409,6 +430,8 @@ class RT0Space(BaseFESpace):
             out[c] = float(np.sum(w * self._evaluate_function(f, pts))) / float(np.sum(w))
         return out
 
+    # 工作块：把已知向量场转换为面通量自由度
+    # 在共享面上计算向量场与约定法向的积分；保存的是法向积分而不是单个坐标点上的向量值。
     def interpolate_flux(self, q) -> np.ndarray:
         """把向量场 ``q(x) -> (d,)`` 插值成**面法向通量**自由度
         :math:`\\Phi_f=\\int_f q\\cdot n_f\\,\\mathrm ds`（全局自由度向量）。
@@ -461,6 +484,8 @@ class RT0Space(BaseFESpace):
             )
         return self._facet_signs[cell_idx] * v[self._cell_facet_dofs[cell_idx]]
 
+    # 工作块：从自由度重构采样点的通量
+    # 先把全局面未知量转换为当前单元的局部系数，再用 RT0 向量基函数作线性组合，输出各点的向量通量。
     def evaluate_flux(self, cell_idx: int, values, points) -> np.ndarray:
         """在单元 ``cell_idx`` 内重构 RT0 通量 :math:`q_h=\\sum_i F_i\\varphi_i`。
 
@@ -487,6 +512,7 @@ class RT0Space(BaseFESpace):
         return np.full(nq, float(p))
 
     def evaluate_gradient(self, cell_idx: int, values, points) -> np.ndarray:
+        # 此标量接口不适用于 RT0 混合空间；调用专用块接口，下面统一报告不支持此操作。
         raise NotImplementedError(
             "混合格式里梯度就是通量：请用 V.evaluate_flux(cell, Q, points)（取负号得到 -q_h）。"
         )
@@ -513,9 +539,11 @@ class RT0Space(BaseFESpace):
     # 混合格式没有单一算子接口
     # ------------------------------------------------------------------
     def _not_supported(self, what: str, hint: str):
+        # 统一说明混合空间不支持的标量算子，提示调用方改用通量、散度及压力专用块接口。
         raise NotImplementedError(f"RT0×P0 是混合格式，没有单一的{what}。{hint}")
 
     def stiffness_matrix(self):
+        # 此标量接口不适用于 RT0 混合空间；调用专用块接口，下面统一报告不支持此操作。
         self._not_supported(
             "刚度矩阵",
             "鞍点系统的两个块请用 V.flux_mass_matrix()（(Φ,Φ) 块）与 "
@@ -523,12 +551,14 @@ class RT0Space(BaseFESpace):
         )
 
     def mass_matrix(self):
+        # 此标量接口不适用于 RT0 混合空间；调用专用块接口，下面统一报告不支持此操作。
         self._not_supported(
             "质量矩阵",
             "通量的质量矩阵是 V.flux_mass_matrix()；压力的质量矩阵是 diag(|K|)。",
         )
 
     def load_vector(self, f):
+        # 此标量接口不适用于 RT0 混合空间；调用专用块接口，下面统一报告不支持此操作。
         self._not_supported(
             "载荷向量",
             "源项只进入压力方程：请用 V.pressure_load_vector(f)。",
@@ -538,6 +568,7 @@ class RT0Space(BaseFESpace):
     # 展示
     # ------------------------------------------------------------------
     def __repr__(self):  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return (
             f"<RT0Space {self.name} dim={self.mesh.dim} "
             f"flux_dofs={self.n_flux} pressure_dofs={self.n_pressure} "

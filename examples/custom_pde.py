@@ -8,6 +8,11 @@
 带点源（Dirac 右端项）的 Poisson 问题。
 """
 
+# 模块职责：如何扩展或选用方程
+# 展示反应扩散、Helmholtz 与自定义点源问题；自定义类通过注册表接入统一调用接口。
+# 扩展重点是 assemble：复用空间矩阵，在右端或矩阵中加入新物理项，然后施加边界条件。
+
+
 import os
 import sys
 
@@ -30,6 +35,7 @@ from MosicaFE.physics.registry import available_problems, register_problem  # no
 # 1) 直接复用内置的反应扩散问题
 # ---------------------------------------------------------------------------
 def demo_reaction_diffusion():
+    # 构造反应扩散算例，将刚度与质量项组合后求解，并用制造解检查结果。
     c = 10.0
     exact = lambda x: np.sin(np.pi * x[0]) * np.sin(np.pi * x[1])          # noqa: E731
     source = lambda x: (2.0 * np.pi ** 2 + c) * exact(x)                   # noqa: E731
@@ -74,11 +80,13 @@ class PointSourcePoissonProblem(BasePhysics):
     """``-Δu = f + δ(x - x0)``，点源落在最近的自由度上。"""
 
     def __init__(self, space, x0, f=None, g=None, weight=1.0, **kwargs):
+        # 初始化 Poisson 公共参数，再保存点源位置与强度，供自定义载荷装配使用。
         super().__init__(space, f=f, g=g, **kwargs)
         self.x0 = np.asarray(x0, dtype=float)
         self.weight = float(weight)
 
     def assemble(self):
+        # 在普通扩散载荷上给最接近点源位置的自由度增加源强，再施加边界条件并返回系统。
         A = self.space.stiffness_matrix()
         b = self.space.load_vector(self.f)
         dist = np.linalg.norm(self.space.dof_coords - self.x0, axis=1)
@@ -88,6 +96,7 @@ class PointSourcePoissonProblem(BasePhysics):
 
 
 def demo_point_source():
+    # 演示自定义点源问题如何在原有载荷向量中增加一个集中源贡献。
     mesh = Mesh.rectangle(nx=24, ny=24)
     V = FESpace.lagrange(mesh, degree=1)
     problem = PointSourcePoissonProblem(V, x0=(0.5, 0.5), f=lambda x: 0.0,
@@ -98,6 +107,7 @@ def demo_point_source():
 
 
 def main():
+    # 依次演示内置反应扩散、Helmholtz 和注册后的点源方程，展示扩展物理层的调用方式。
     print("已注册的 PDE：", available_problems())
     demo_reaction_diffusion()
     demo_helmholtz()

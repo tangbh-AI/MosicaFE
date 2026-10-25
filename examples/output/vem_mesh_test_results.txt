@@ -1,0 +1,148 @@
+MosicaFE 测试运行器（pytest 可用：False）
+========================================================================
+  ok    test_core_spaces.test_cell_quadrature_integrates_area
+  ok    test_core_spaces.test_lagrange_nodal_property[mesh=<Mesh rectangle[triangle](3x3) dim=2 nodes=16 cells=18 boundary_nodes=12 h=0.4714>, elements=('P1', 'P2')]
+  ok    test_core_spaces.test_lagrange_nodal_property[mesh=<Mesh rectangle[quad](3x3) dim=2 nodes=16 cells=9 boundary_nodes=12 h=0.4714>, elements=('Q1', 'Q2')]
+  ok    test_core_spaces.test_lagrange_nodal_property[mesh=<Mesh box[tet](2x2x2) dim=3 nodes=27 cells=48 boundary_nodes=26 h=0.866>, elements=('P1', 'P2')]
+  ok    test_core_spaces.test_lagrange_nodal_property[mesh=<Mesh box[hex](2x2x2) dim=3 nodes=27 cells=8 boundary_nodes=26 h=0.866>, elements=('Q1', 'Q2')]
+  ok    test_core_spaces.test_lagrange_stiffness_symmetry
+  ok    test_core_spaces.test_mesh_families[mesh=<Mesh rectangle[triangle](3x3) dim=2 nodes=16 cells=18 boundary_nodes=12 h=0.4714>, n_cells=18, n_nodes=16]
+  ok    test_core_spaces.test_mesh_families[mesh=<Mesh rectangle[quad](3x3) dim=2 nodes=16 cells=9 boundary_nodes=12 h=0.4714>, n_cells=9, n_nodes=16]
+  ok    test_core_spaces.test_mesh_families[mesh=<Mesh box[tet](2x2x2) dim=3 nodes=27 cells=48 boundary_nodes=26 h=0.866>, n_cells=48, n_nodes=27]
+  ok    test_core_spaces.test_mesh_families[mesh=<Mesh box[hex](2x2x2) dim=3 nodes=27 cells=8 boundary_nodes=26 h=0.866>, n_cells=8, n_nodes=27]
+  ok    test_core_spaces.test_mesh_families[mesh=<Mesh pentagon(3x3) dim=2 nodes=22 cells=9 boundary_nodes=15 h=0.4714>, n_cells=9, n_nodes=None]
+  ok    test_core_spaces.test_mesh_families[mesh=<Mesh voronoi(25) dim=2 nodes=52 cells=25 boundary_nodes=19 h=0.5371>, n_cells=25, n_nodes=None]
+  ok    test_core_spaces.test_mesh_from_arrays
+  ok    test_core_spaces.test_mesh_refine_uniform
+  ok    test_core_spaces.test_mesh_topology_rectangle
+  ok    test_core_spaces.test_patch_test[mesh=<Mesh rectangle[triangle](4x4) dim=2 nodes=25 cells=32 boundary_nodes=16 h=0.3536>, elem='P1']
+  ok    test_core_spaces.test_patch_test[mesh=<Mesh rectangle[triangle](4x4) dim=2 nodes=25 cells=32 boundary_nodes=16 h=0.3536>, elem='P2']
+  ok    test_core_spaces.test_patch_test[mesh=<Mesh rectangle[quad](4x4) dim=2 nodes=25 cells=16 boundary_nodes=16 h=0.3536>, elem='Q1']
+  ok    test_core_spaces.test_patch_test[mesh=<Mesh rectangle[triangle](4x4) dim=2 nodes=25 cells=32 boundary_nodes=16 h=0.3536>, elem='VEM']
+  ok    test_core_spaces.test_patch_test[mesh=<Mesh rectangle[quad](4x4) dim=2 nodes=25 cells=16 boundary_nodes=16 h=0.3536>, elem='VEM']
+  ok    test_core_spaces.test_patch_test[mesh=<Mesh pentagon(4x4) dim=2 nodes=35 cells=16 boundary_nodes=20 h=0.3536>, elem='VEM']
+  ok    test_core_spaces.test_patch_test[mesh=<Mesh voronoi(30) dim=2 nodes=62 cells=30 boundary_nodes=21 h=0.4286>, elem='VEM']
+  ok    test_core_spaces.test_quadrature_polynomial_exactness
+  ok    test_core_spaces.test_quadrature_weights
+  ok    test_core_spaces.test_vem_mass_row_sum_matches_load
+  ok    test_core_spaces.test_vem_stiffness_properties[mesh=<Mesh rectangle[triangle](3x3) dim=2 nodes=16 cells=18 boundary_nodes=12 h=0.4714>]
+  ok    test_core_spaces.test_vem_stiffness_properties[mesh=<Mesh rectangle[quad](3x3) dim=2 nodes=16 cells=9 boundary_nodes=12 h=0.4714>]
+  ok    test_core_spaces.test_vem_stiffness_properties[mesh=<Mesh pentagon(3x3) dim=2 nodes=22 cells=9 boundary_nodes=15 h=0.4714>]
+  ok    test_core_spaces.test_vem_stiffness_properties[mesh=<Mesh voronoi(25) dim=2 nodes=52 cells=25 boundary_nodes=20 h=0.5542>]
+  ok    test_core_spaces.test_vem_stiffness_properties[mesh=<Mesh box[tet](2x2x2) dim=3 nodes=27 cells=48 boundary_nodes=26 h=0.866>]
+  ok    test_physics_solvers.test_convergence_2d[elem='P1', expected_l2=1.9]
+  ok    test_physics_solvers.test_convergence_2d[elem='P2', expected_l2=2.8]
+  ok    test_physics_solvers.test_convergence_2d[elem='VEM', expected_l2=1.8]
+  ok    test_physics_solvers.test_convergence_study_runner
+  ok    test_physics_solvers.test_convergence_vem_polygon
+  ok    test_physics_solvers.test_dirichlet_rhs_correction
+  ok    test_physics_solvers.test_dirichlet_sparse_matches_dense
+  ok    test_physics_solvers.test_element_alias_resolution
+  ok    test_physics_solvers.test_error_norm_types
+  ok    test_physics_solvers.test_gmres_solves_nonsymmetric_dense
+  ok    test_physics_solvers.test_helmholtz_by_name_api
+  ok    test_physics_solvers.test_helmholtz_convergence_2d[elem='P1', expected_l2=1.9]
+  ok    test_physics_solvers.test_helmholtz_convergence_2d[elem='P2', expected_l2=2.8]
+  ok    test_physics_solvers.test_helmholtz_convergence_2d[elem='VEM', expected_l2=1.8]
+  ok    test_physics_solvers.test_helmholtz_definiteness_switches_at_resonance
+  ok    test_physics_solvers.test_helmholtz_recovers_poisson_and_scales_with_kappa
+  ok    test_physics_solvers.test_helmholtz_registered
+  ok    test_physics_solvers.test_helmholtz_rejects_non_real_or_rt0
+  ok    test_physics_solvers.test_nodal_values_reproduces_dofs
+  ok    test_physics_solvers.test_reaction_diffusion_recovers_poisson
+  ok    test_physics_solvers.test_registry_and_custom_pde
+  ok    test_physics_solvers.test_rt0_mixed_solve_2d
+  ok    test_physics_solvers.test_rt0_mixed_solve_3d
+  ok    test_physics_solvers.test_rt0_rejects_non_simplex_mesh
+  ok    test_physics_solvers.test_solve_helmholtz_api[elem='P1']
+  ok    test_physics_solvers.test_solve_helmholtz_api[elem='P2']
+  ok    test_physics_solvers.test_solve_helmholtz_api[elem='Q1']
+  ok    test_physics_solvers.test_solve_helmholtz_api[elem='Q2']
+  ok    test_physics_solvers.test_solve_helmholtz_api[elem='VEM']
+  ok    test_physics_solvers.test_solve_poisson_api[elem='P1']
+  ok    test_physics_solvers.test_solve_poisson_api[elem='P2']
+  ok    test_physics_solvers.test_solve_poisson_api[elem='Q1']
+  ok    test_physics_solvers.test_solve_poisson_api[elem='VEM']
+  ok    test_physics_solvers.test_solve_poisson_api[elem='RT0']
+  ok    test_physics_solvers.test_solve_poisson_return_all
+  ok    test_physics_solvers.test_solver_agreement
+  ok    test_physics_solvers.test_solver_recommendation
+  ok    test_rt0_native.test_conservation_on_3d_mesh
+  ok    test_rt0_native.test_direct_and_schur_agree
+  ok    test_rt0_native.test_facet_topology_counts_2d
+  ok    test_rt0_native.test_facet_topology_counts_3d
+  ok    test_rt0_native.test_facet_topology_orientation
+  ok    test_rt0_native.test_facet_topology_rejects_non_simplex
+  ok    test_rt0_native.test_flux_at_points_reproduces_local_reconstruction
+  ok    test_rt0_native.test_global_blocks_have_expected_structure
+  ok    test_rt0_native.test_interpolate_flux_matches_face_integrals
+  ok    test_rt0_native.test_interpolate_pressure_is_cell_average
+  ok    test_rt0_native.test_local_facets_are_opposite_to_vertices
+  ok    test_rt0_native.test_lumped_mass_is_diagonally_dominant
+  ok    test_rt0_native.test_mixed_error_norms_native_implementation
+  ok    test_rt0_native.test_mixed_space_rejects_single_operator_api
+  ok    test_rt0_native.test_nonhomogeneous_dirichlet_is_rejected
+  ok    test_rt0_native.test_rt0_basis_face_flux_is_one
+  ok    test_rt0_native.test_rt0_mass_matrix_closed_form_matches_quadrature
+  ok    test_rt0_native.test_rt0_mass_matrix_is_orientation_independent
+  ok    test_rt0_native.test_rt0_space_has_no_external_backend_import
+  ok    test_rt0_native.test_solve_poisson_api_uses_native_rt0
+  ok    test_rt0_native.test_space_dof_layout_and_coordinates
+  ok    test_rt0_native.test_space_reference_nodes_map_back_to_dofs
+  ok    test_tensor_geometry.test_compute_jacobian_defaults_to_reference_center
+  ok    test_tensor_geometry.test_gradient_transform_is_exact_for_linear_function
+  ok    test_tensor_geometry.test_inverse_map_round_trip_on_distorted_quad
+  ok    test_tensor_geometry.test_jacobian_convention_consistent_between_simplex_and_tensor
+  ok    test_tensor_geometry.test_local_stiffness_matches_reference_on_distorted_quad
+  ok    test_tensor_geometry.test_p1_triangle_is_unaffected
+  ok    test_tensor_geometry.test_patch_test_on_distorted_and_rotated_quad[degree=1]
+  ok    test_tensor_geometry.test_patch_test_on_distorted_and_rotated_quad[degree=2]
+  ok    test_tensor_geometry.test_patch_test_on_distorted_hex
+  ok    test_tensor_geometry.test_q1_hex_converges_on_rotated_box
+  ok    test_tensor_geometry.test_q1_is_invariant_under_rotation_and_converges
+  ok    test_tensor_geometry.test_q2_converges_on_rotated_quad_mesh
+  ok    test_tensor_geometry.test_tensor_jacobian_matches_finite_difference[name='轴对齐正方形', vertices=[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], xi=[0.3, 0.7]]
+  ok    test_tensor_geometry.test_tensor_jacobian_matches_finite_difference[name='旋转正方形', vertices=[[0.0, 0.0], [0.7, 0.7], [0.0, 1.4], [-0.7, 0.7]], xi=[0.3, 0.7]]
+  ok    test_tensor_geometry.test_tensor_jacobian_matches_finite_difference[name='平行四边形', vertices=[[0.0, 0.0], [1.0, 0.2], [0.8, 1.1], [-0.2, 0.9]], xi=[0.3, 0.7]]
+  ok    test_tensor_geometry.test_tensor_jacobian_matches_finite_difference[name='畸变四边形', vertices=[[0.0, 0.0], [1.0, 0.1], [1.2, 1.0], [0.1, 0.9]], xi=[0.35, 0.6]]
+  ok    test_tensor_geometry.test_tensor_jacobian_matches_finite_difference[name='畸变六面体', vertices=[[0.0, 0.0, 0.0], [1.0, 0.1, 0.0], [1.1, 1.0, 0.05], [0.1, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.1, 1.05], [1.05, 1.0, 1.0], [0.1, 1.0, 0.95]], xi=[0.3, 0.6, 0.4]]
+  ok    test_vem_high_order.test_high_order_simplex_quadrature[dim=2, degree=10]
+  ok    test_vem_high_order.test_high_order_simplex_quadrature[dim=3, degree=9]
+  ok    test_vem_high_order.test_vem_general_polyhedron_and_rotated_geometry
+  ok    test_vem_high_order.test_vem_invalid_degree[k=0]
+  ok    test_vem_high_order.test_vem_invalid_degree[k=-1]
+  ok    test_vem_high_order.test_vem_invalid_degree[k=1.5]
+  ok    test_vem_high_order.test_vem_invalid_degree[k=True]
+  ok    test_vem_high_order.test_vem_polynomial_poisson_with_nonzero_boundary[dim=2, k=2]
+  ok    test_vem_high_order.test_vem_polynomial_poisson_with_nonzero_boundary[dim=2, k=3]
+  ok    test_vem_high_order.test_vem_polynomial_poisson_with_nonzero_boundary[dim=3, k=2]
+  ok    test_vem_high_order.test_vem_polynomial_poisson_with_nonzero_boundary[dim=3, k=3]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='quad', k=1]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='quad', k=2]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='quad', k=3]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='quad', k=4]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='quad', k=5]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='triangle', k=3]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='pentagon', k=3]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='voronoi', k=3]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='hex', k=1]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='hex', k=2]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='hex', k=3]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='hex', k=4]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='hex', k=5]
+  ok    test_vem_high_order.test_vem_polynomial_projection_and_consistency[kind='tet', k=3]
+  ok    test_vem_high_order.test_vem_shared_dofs_and_element_alias
+  ok    test_vem_high_order.test_vem_sine_poisson_convergence[dim=2, k=2]
+  ok    test_vem_high_order.test_vem_sine_poisson_convergence[dim=2, k=3]
+  ok    test_vem_high_order.test_vem_sine_poisson_convergence[dim=3, k=2]
+  ok    test_vem_high_order.test_vem_sine_poisson_convergence[dim=3, k=3]
+  ok    test_vem_meshes.test_eight_vertices_do_not_imply_hexahedron
+  ok    test_vem_meshes.test_mixed_hex_and_triangular_prisms
+  ok    test_vem_meshes.test_polyhedron_open_boundary_is_rejected
+  ok    test_vem_meshes.test_star_shaped_concave_polygon_and_polyhedron
+  ok    test_vem_meshes.test_true_slice_area_and_projected_values[kind='hex']
+  ok    test_vem_meshes.test_true_slice_area_and_projected_values[kind='voronoi']
+  ok    test_vem_meshes.test_voronoi_3d_volume_topology_and_poisson[seed=3]
+  ok    test_vem_meshes.test_voronoi_3d_volume_topology_and_poisson[seed=42]
+========================================================================
+通过 144，失败 0

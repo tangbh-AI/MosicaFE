@@ -8,6 +8,11 @@
 不依赖 pytest，纯粹为了"一条命令看结果"。
 """
 
+# 模块职责：数值精度与收敛性自检
+# 使用已知解分别检查二维、三维、虚拟元、混合元和 Helmholtz 问题。
+# 输出误差、收敛阶和特征值等量，帮助识别矩阵性质或网格加密行为是否符合理论。
+
+
 from __future__ import annotations
 
 import os
@@ -25,10 +30,12 @@ from MosicaFE.postprocess.error import estimate_convergence_rate, rate_table  # 
 # 制造解
 # ---------------------------------------------------------------------------
 def exact_2d(x):
+    # 定义二维正弦制造解，作为二维误差和收敛性检查的基准。
     return np.sin(np.pi * x[0]) * np.sin(np.pi * x[1])
 
 
 def grad_2d(x):
+    # 返回二维正弦精确解的梯度，各分量与物理坐标方向一致。
     return np.array(
         [
             np.pi * np.cos(np.pi * x[0]) * np.sin(np.pi * x[1]),
@@ -38,18 +45,22 @@ def grad_2d(x):
 
 
 def source_2d(x):
+    # 给出二维正弦解对应的源项 2π²u。
     return 2.0 * np.pi ** 2 * exact_2d(x)
 
 
 def flux_2d(x):
+    # 给出二维负梯度通量，用于混合格式的通量误差检查。
     return -grad_2d(x)
 
 
 def exact_3d(x):
+    # 定义三维正弦制造解，作为三维误差和收敛性检查的基准。
     return np.sin(np.pi * x[0]) * np.sin(np.pi * x[1]) * np.sin(np.pi * x[2])
 
 
 def grad_3d(x):
+    # 返回三维正弦精确解的梯度，供三维误差积分使用。
     s = np.sin
     c = np.cos
     return np.pi * np.array(
@@ -62,6 +73,7 @@ def grad_3d(x):
 
 
 def source_3d(x):
+    # 给出三维正弦解对应的源项 3π²u。
     return 3.0 * np.pi ** 2 * exact_3d(x)
 
 
@@ -92,6 +104,7 @@ def check_2d(element, levels=(4, 8, 16, 32), mesh_factory=None, label=None):
 
 
 def check_3d(element, levels=(2, 4, 8), label=None):
+    # 在三维网格上逐层求解制造解问题，输出误差和估计收敛阶以核对空间精度。
     hs, errs = [], {"L2": [], "H1": [], "Linf": []}
     for n in levels:
         mesh = mf.Mesh.box(nx=n, ny=n, nz=n, element_type="hex" if element in ("Q1", "Q2") else "tet")
@@ -163,6 +176,7 @@ def check_patch_test():
 
 
 def check_rt0(levels=(4, 8, 16, 32)):
+    # 检查二维 RT0 压力和通量的误差，以及单元守恒随网格加密的表现。
     hs, errs = [], {"L2": [], "H1": [], "Linf": []}
     for n in levels:
         mesh = mf.Mesh.rectangle(nx=n, ny=n)
@@ -183,6 +197,7 @@ def check_rt0(levels=(4, 8, 16, 32)):
 
 
 def main():
+    # 执行二维、三维及不同方程的制造解自检，输出误差、收敛阶和相关矩阵性质。
     print("MosicaFE 自检")
     print("=" * 70)
     ok = check_patch_test()
@@ -210,6 +225,7 @@ def main():
 
 
 def check_rt0_3d(levels=(2, 4, 8)):
+    # 检查三维 RT0 混合求解的压力、通量精度和质量守恒。
     hs, l2, q2 = [], [], []
     for n in levels:
         mesh = mf.Mesh.box(nx=n, ny=n, nz=n, element_type="tet")

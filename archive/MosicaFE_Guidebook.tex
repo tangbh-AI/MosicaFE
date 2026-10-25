@@ -6,7 +6,7 @@
 %  guidebook.pdf.
 %
 %  LANGUAGE POLICY (project convention, do not change):
-%    * Every version of this guidebook is written in English.
+%    * This file is the English edition; the _zh file is the Chinese edition.
 %    * MosicaFE/README.md stays in Chinese.
 %    * Code listings and comments inside this document are English too.
 %
@@ -27,9 +27,10 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{array}
+\newsavebox{\guideTableBox}
 \usepackage{graphicx}
 \usepackage{listings}
-\usepackage{upquote}
+\usepackage{textcomp} % Upright quotes for listings; no separate upquote dependency.
 \usepackage{xcolor}
 \usepackage{tcolorbox}
 \usepackage{algorithm}
@@ -41,6 +42,7 @@
 \usepackage[hidelinks]{hyperref}
 
 \geometry{a4paper,left=2.6cm,right=2.6cm,top=2.8cm,bottom=2.8cm}
+\emergencystretch=3em
 
 % ---------------------------------------------------------------------------
 %  Code typesetting
@@ -132,7 +134,7 @@
        \Large Discretizations of Partial Differential Equations\\[0.6em]
        \large User Guide and Developer Manual}
 \author{\normalsize MosicaFE contributors}
-\date{\normalsize September 20, 2026}
+\date{\normalsize \today}
 
 % ===========================================================================
 \begin{document}
@@ -267,7 +269,7 @@ plot_solution(u, mesh, V, filename="p2.png")  # (4) choose a visualization
 print(problem.compute_errors(u, exact))
 \end{lstlisting}
 
-Replacing \code{FESpace.lagrange(mesh, degree=2)} in
+Replacing \code{FESpace.lagrange(mesh,\allowbreak  degree=2)} in
 Listing~\ref{lst:quicksplit} by \code{FESpace.vem(mesh)} no longer produces a finite
 element solution: it produces the virtual element solution of the \textbf{same
 equation} on the \textbf{same mesh}, and nothing else in the program changes.
@@ -302,6 +304,7 @@ line of code.
 \centering
 \caption{Module layout of \mosica{}}
 \label{tab:modules}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lp{10.4cm}@{}}
 \toprule
 Module & Responsibility \\
@@ -311,7 +314,7 @@ polygon / Voronoi), \textbf{facet topology and orientation} (\code{facets.py}, t
 basis of $H(\mathrm{div})$-conforming spaces), quadrature rules, geometric tools
 (area, volume, Jacobian, gradient transformation) \\
 \module{spaces} & Discrete spaces: \code{LagrangeSpace} (P1/P2/Q1/Q2),
-\code{VEMSpace} ($k=1$ virtual elements), \code{RT0Space} (RT0$\times$P0), and the
+\code{VEMSpace} (arbitrary-order enhanced VEM), \code{RT0Space} (RT0$\times$P0), and the
 factory \code{FESpace} \\
 \module{physics} & PDE weak forms and assembly: \code{PoissonProblem},
 \code{MixedPoissonProblem}, \code{ReactionDiffusionProblem},
@@ -322,13 +325,17 @@ automatic selection \\
 visualization, and error norms for mixed formulations (pressure $+$ flux) \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{important}
 All three element families (FEM, VEM and RT0) are \textbf{implemented inside the
 library itself}: the explicit RT0$\times$P0 basis functions, the exact mass matrix,
-the facet topology and the saddle-point assembly live in \code{spaces/rt0.py},
-\code{core/facets.py} and \code{physics/mixed\_poisson.py}, respectively.
+the facet topology and the saddle-point assembly live in \path{spaces/rt0.py},
+\path{core/facets.py} and \path{physics/mixed_poisson.py}, respectively.
 \mosica{} neither depends on nor requires any external finite element backend.
 \end{important}
 
@@ -369,6 +376,7 @@ Python 3.12.10 (conda environment \code{fealpy}), with \code{numpy} 2.2.4,
 \centering
 \caption{Dependencies}
 \label{tab:deps}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lll@{}}
 \toprule
 Package & Required & Purpose \\
@@ -378,6 +386,10 @@ Package & Required & Purpose \\
 \code{matplotlib} & optional & visualization \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 If \code{scipy} is missing, \mosica{} automatically falls back to a purely
@@ -446,7 +458,7 @@ pdflatex MosicaFE_Guidebook.tex
 pdflatex MosicaFE_Guidebook.tex
 \end{lstlisting}
 
-Alternatively use \code{latexmk -pdf MosicaFE\_Guidebook.tex}. XeLaTeX{} produces the
+Alternatively use \code{latexmk -pdf MosicaFE\_\allowbreak Guidebook.tex}. XeLaTeX{} produces the
 same output. TeXShop users select \code{pdfLaTeX} as the engine and press Typeset.
 
 % ===========================================================================
@@ -484,7 +496,7 @@ u=g, & \text{on } \partial\Omega .
 \end{equation}
 
 It is the equation solved by the built-in \code{HelmholtzProblem} and by the
-one-line helper \code{solve\_helmholtz}. Two remarks are needed.
+one-line helper \code{solve\_\allowbreak helmholtz}. Two remarks are needed.
 
 \begin{important}
 \textbf{Low frequency means non-resonant.} The operator is
@@ -570,6 +582,7 @@ transformation
 \centering
 \caption{Lagrange elements available in \mosica{}}
 \label{tab:lagrange}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llcc@{}}
 \toprule
 Element & Name & Local DOFs per cell & DOF type \\
@@ -584,135 +597,147 @@ hexahedron & Q1 & 8 & vertices \\
 hexahedron & Q2 & 27 & vertices $+$ edges $+$ faces $+$ cell interior \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
-\section{Virtual Element Discretization (VEM)}
+\section[Arbitrary-Order VEM]{Arbitrary-Order Virtual Element Discretization (VEM)}
 \label{sec:vem-math}
+The library implements conforming enhanced VEM in two and three dimensions.
+A positive integer \code{degree=k} selects the order. The mesh--space--problem--solve--postprocess
+workflow is unchanged. \code{LocalVEM} in \path{spaces/vem_local.py} builds the local
+operators recursively; \code{VEMSpace} in \path{spaces/vem.py} shares global degrees
+of freedom and assembles the system. Explicit virtual basis functions are unnecessary.
 
-The key idea of the virtual element method is that \textbf{the basis functions need
-not be written down explicitly}. The degree-one ($k=1$) virtual element space is
-defined as
+\subsection{Local Space and Degrees of Freedom}
+Let $\mathcal P_r(E)$ contain polynomials of total degree at most $r$ on an entity $E$,
+with $\mathcal P_r=\{0\}$ for $r<0$. Let $\mathcal B_k^*(K)$ contain the scaled
+monomials of total degree exactly $k-1$ or $k$. Cells and, recursively, 3D faces use
+the enhanced space
 
 \begin{equation}
-V_h(K)=\Bigl\{v\in H^1(K):\ \Delta v\in\mathcal{P}_1(K),\
-v|_e\in\mathcal{P}_1(e)\ \forall e\subset\partial K\Bigr\},
+\begin{split}
+V_k(K)=\{v\in H^1(K):\;&v|_{\partial K}\text{ continuous},\quad
+v|_F\in V_k(F),\quad \Delta v\in\mathcal P_k(K),\\
+&(v-\Pi_k^\nabla v,m)_K=0\quad\forall m\in\mathcal B_k^*(K)\}.
+\end{split}
 \label{eq:vem-space}
 \end{equation}
+In 2D, $F$ is an edge and $V_k(F)=\mathcal P_k(F)$; in 3D, $F$ is a planar
+polygonal face. Enhancement supplies the high moments without extra unknowns.
+The degrees of freedom are:
+\begin{enumerate}[itemsep=0.2em]
+\item Vertex values and values at $k-1$ equally spaced interior points of each edge.
+\item Normalized moments $|E|^{-1}\int_E v m_\alpha$, $|\alpha|\le k-2$,
+on 2D cells and on 3D faces.
+\item The analogous volume moments on 3D cells, $|\alpha|\le k-2$.
+\end{enumerate}
+Shared vertices, edges and faces receive a single global set of unknowns.
+Only vertex values remain when $k=1$. For $n_v$ vertices, $n_e$ edges and $n_f$ faces,
 
-and its degrees of freedom are simply the function values at the vertices. The
-bilinear form on a cell is split into two parts:
+\begin{align*}
+N_K^{2D}&=n_v+n_e(k-1)+\frac{k(k-1)}2,\\
+N_K^{3D}&=n_v+n_e(k-1)+n_f\frac{k(k-1)}2+
+\frac{(k-1)k(k+1)}6.
+\end{align*}
+
+\subsection{Scaled Monomials and Energy Projection}
+\code{powers(dim,\allowbreak k)} enumerates $|\alpha|\le k$, so no separate formula is needed
+for each order. The center $c_E$ is the arithmetic mean of the vertices, $h_E$ is the
+diameter, and $m_\alpha(x)=\prod_j(((x-c_E)Q_E)_j/h_E)^{\alpha_j}$.
+For 3D faces, $Q_E$ is an orthonormal plane basis obtained by SVD; volume cells use
+the coordinate axes. The energy projection satisfies
 
 \begin{equation}
-a_h(u_h,v_h)=\underbrace{a\bigl(\Pi^{\nabla}u_h,\Pi^{\nabla}v_h\bigr)}_{A_{\rm proj}}
-+\underbrace{S_K\bigl((I-\Pi)u_h,(I-\Pi)v_h\bigr)}_{S_{\rm stab}} .
-\label{eq:vem-split}
-\end{equation}
-
-\subsection{Projection Operator}
-
-Take the scaled monomial basis $m_0=1$, $m_{k+1}=x_k-x_{K,k}$ (with $x_K$ the cell
-centroid). The projection $\Pi^{\nabla}:V_h(K)\to\mathcal{P}_1(K)$ satisfies
-
-\begin{equation}
-\int_K\nabla\Pi^{\nabla}v\cdot\nabla q\dif x
-=\int_K\nabla v\cdot\nabla q\dif x
-=-\int_K v\,\Delta q\dif x+\int_{\partial K}v\,(\nabla q\cdot n)\dif s
-=\int_{\partial K}v\,(\nabla q\cdot n)\dif s ,
+(\nabla\Pi_k^\nabla v,\nabla q)_K
+=-(v,\Delta q)_K+\sum_{F\subset\partial K}(v,\partial_n q)_F,
+\qquad q\in\mathcal P_k(K).
 \label{eq:vem-proj}
 \end{equation}
-
-where the last equality uses $\Delta q=0$ ($q$ being a linear polynomial). Since
-$v|_e$ is linear on every edge, the boundary integral
-$\int_e v\,(\nabla q\cdot n)\dif s$ is computed \textbf{exactly by the trapezoidal
-rule}:
+The internal moments determine the volume term since $\deg\Delta q\le k-2$.
+Child projections determine the boundary term. On an edge the $k+1$ point values
+uniquely determine the polynomial trace:
 
 \begin{equation}
-\int_e v\,(\nabla q\cdot n)\dif s
-=\frac{|e|}{2}\Bigl(v(a)(\nabla q\cdot n)+v(b)(\nabla q\cdot n)\Bigr).
+v|_e=\sum_{i=0}^{k}v(x_i)\ell_i,\qquad
+\int_e v\,\partial_nq=\sum_{i=0}^{k}v(x_i)\int_e\ell_i\,\partial_nq.
 \label{eq:vem-edge}
 \end{equation}
-
-In matrix form, let $G=[\nabla m_0,\dots,\nabla m_d]\in\mathbb{R}^{d\times(d+1)}$,
-$M=|K|\,G^{\top}G$ and
-$R_{\alpha i}=\int_{\partial K}\varphi_i(\nabla m_\alpha\cdot n)\dif s$; then
-
 \begin{equation}
-\Pi=\text{pinv}(M)\,R\in\mathbb{R}^{(d+1)\times n}.
-\label{eq:vem-pi}
-\end{equation}
-
-\begin{caution}
-The normalization of the constant mode is essential. If one sets $\Pi_{0i}=1/n$
-(the arithmetic mean of the vertex values), the projection reproduces linear
-polynomials exactly only when the ``arithmetic mean of the vertices'' coincides with
-the centroid --- true for triangles and squares, but false for general polygons. The
-correct normalization follows from
-$\ p(x_K)=\overline{d}-\nabla p\cdot(\overline{X}-x_K)$:
-
-\begin{equation}
-\Pi_{0\cdot}=\frac{1}{n}\mathbf{1}^{\top}
--(\overline{X}-x_K)\,\Pi_{1:d,\cdot},
-\qquad \overline{X}=\frac{1}{n}\sum_i X_i .
+\begin{cases}
+\displaystyle\int_K\Pi_k^\nabla v=\int_Kv,& k\ge2,\\
+\displaystyle\frac1{n_v}\sum_i(\Pi_1^\nabla v)(X_i)
+=\frac1{n_v}\sum_i v(X_i),&k=1.
+\end{cases}
 \label{eq:vem-const}
 \end{equation}
-
-Ignoring this makes the stabilization penalize linear functions, which destroys
-consistency: on irregular polygonal meshes the $L^2$ convergence order drops from 2
-to below 0.5. See Section~\ref{sec:pitfall-vem} for details.
-\end{caution}
-
-\subsection{Stabilization}
-
-By default \mosica{} uses the \textbf{symmetric positive semi-definite} stabilization
+The last condition fixes the undetermined constant. Set
+$D_{i\alpha}=\operatorname{dof}_i(m_\alpha)$,
+$H_{\alpha\beta}=(m_\alpha,m_\beta)_K$, and
+$G_{\alpha\beta}=(\nabla m_\alpha,\nabla m_\beta)_K$.
+Replacing the constant row by the mean condition gives $\widetilde G$ and the
+corresponding right-hand side $B$:
 
 \begin{equation}
-S_{\rm stab}=\sigma\,(I-\Pi_{\rm dof})^{\top}(I-\Pi_{\rm dof}),\qquad
-\Pi_{\rm dof}=D\,\Pi,\quad
-D_{i\cdot}=[1,\ X_i-x_K],
+P_\nabla=\operatorname{solve}(\widetilde G,B),\qquad
+\Pi_k^\nabla v=\sum_\alpha(P_\nabla\mathbf v)_\alpha m_\alpha.
+\label{eq:vem-pi}
+\end{equation}
+This is a linear solve, replacing the old pseudoinverse or linear least-squares
+reconstruction. The identity $P_\nabla D=I$ verifies reproduction of all of $\mathcal P_k$.
+
+\subsection{$L^2$ Projection, Stiffness, Mass and Load}
+Start with $C=HP_\nabla$, then replace rows of degree at most $k-2$ by $|K|$ times
+the selection rows for the true internal moments. Higher rows retain the enhanced
+moments. Thus $P_0=\operatorname{solve}(H,C)$.
+
+\begin{equation}
+A_K=P_\nabla^TGP_\nabla+S_K,
+\label{eq:vem-split}
+\end{equation}
+\begin{equation}
+R_\nabla=I-DP_\nabla,\qquad S_K=\sigma R_\nabla^TR_\nabla,
 \label{eq:vem-stab}
 \end{equation}
-
-with the scaling factor
-
 \begin{equation}
-\sigma=\frac{\operatorname{tr}(A_{\rm proj})}{\operatorname{tr}\bigl((I-\Pi_{\rm dof})^{\top}(I-\Pi_{\rm dof})\bigr)}
+\sigma=\frac{\operatorname{tr}(P_\nabla^TGP_\nabla)}
+{\max(\operatorname{tr}(R_\nabla^TR_\nabla),10^{-30})}.
 \label{eq:vem-sigma}
 \end{equation}
-
-so that both terms have comparable magnitude (which also aligns their physical
-dimensions). Passing \code{stabilization="legacy"} reproduces the skew form
-$(I-\Pi_{\rm dof})/n$ of the early scripts (not recommended), while
-\code{stabilization="none"} is intended for diagnostics only, since the pure
-projection term is singular.
-
-\subsection{Load Vector and Mass Matrix}
-
-Virtual basis functions have no explicit expression, so $\int_K f\varphi_i$ is
-approximated by \textbf{piecewise linear interpolation on a fan triangulation (a
-tetrahedral subdivision in 3D)}. Splitting the cell from its centroid into
-$T_1,\dots,T_n$, where $T_i$ has the three corners $c$ (the centroid), $V_i$ and
-$V_{i+1}$ with barycentric coordinates $L_0,L_1,L_2$, gives
-
 \begin{equation}
-\int_K f\varphi_j\dif x
-\approx c_0[j]\sum_i\int_{T_i} f L_0\dif x
-+\int_{T_j}f L_1\dif x
-+\int_{T_{j-1}}f L_2\dif x,
+\begin{split}
+M_K&=P_0^THP_0+|K|(I-DP_0)^T(I-DP_0),\\
+b_K&=P_0^T\mathbf f_K,\qquad
+(\mathbf f_K)_\alpha=\int_K f m_\alpha.
+\end{split}
 \label{eq:vem-load}
 \end{equation}
+The default \code{trace} stabilization is symmetric positive semi-definite;
+\code{legacy} is now a compatibility alias. Stabilization is skipped when the
+residual norm is below $10^{-10}$. \code{none} returns only the consistency term and
+generally leaves an uncontrolled projection kernel; use it for diagnostics.
+The central matrix operations are:
 
-where $c_0[j]$ is the interpolation of the basis function $\varphi_j$ at the
-centroid (computed by linear least-squares reconstruction, which guarantees both
-linear reproduction and the partition of unity). For triangular meshes this formula
-is exact; for general polygons it retains the correct geometric weights.
+\begin{lstlisting}[language=MosicaFE,caption={Core local projection and stabilization operations}]
+energy = np.linalg.solve(system, rhs)
+moments = H @ energy
+for j in range(len(self.low)):
+    moments[j] = 0.0
+    moments[j, self.moment_start+j] = self.measure
+l2 = np.linalg.solve(H, moments)
+consistent = energy.T @ G @ energy
+residual = np.eye(len(self.dofs)) - D @ energy
+stable = residual.T @ residual
+scale = np.trace(consistent) / max(np.trace(stable), 1e-30)
+\end{lstlisting}
 
-\begin{caution}
-The early scripts used $|K|/n$ for every vertex as an approximation of
-$\int_K\varphi_i$. On quadrilateral and triangular cells that approximation happens
-to be good enough, but on irregular polygons it strongly overestimates the vertices
-on ``short edges'', which stalls convergence. This is precisely why the load vector
-and the mass matrix were changed to formula~\eqref{eq:vem-load}.
-\end{caution}
+The default quadrature parameter is $2k+2$, with dynamic Gauss/Duffy rules at
+higher order. Triangle/tetrahedron fans serve integration only and introduce no FEM
+submesh unknowns. \code{VEMSpace} reuses \code{BaseFESpace} assembly. Dirichlet data
+sets both point values and normalized boundary-face moments; a moment degree of
+freedom must not be treated as a point value.
 
 \section{RT0\texorpdfstring{$\times$}{x}P0 Mixed Discretization}
 
@@ -749,6 +774,7 @@ not apply.
 \centering
 \caption{Degrees of freedom and boundary conditions of RT0$\times$P0}
 \label{tab:rt0}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lll@{}}
 \toprule
 Quantity & Location of DOFs & Count \\
@@ -759,6 +785,10 @@ pressure $p_h$ & one constant per cell & $\#$cells \\
 Dirichlet condition $p=0$ & \multicolumn{2}{l}{\textbf{natural} boundary condition of the mixed form, no elimination needed} \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \section{Error Estimates}
@@ -781,7 +811,7 @@ If $u\in H^{k+1}(\Omega)$ and polynomials of degree $k$ are used, then
 \begin{itemize}[itemsep=0.15em]
   \item P1 (triangles): $L^2$ is $O(h^2)$, $H^1$ is $O(h)$;
   \item P2 / Q2: $L^2$ is $O(h^3)$, $H^1$ is $O(h^2)$;
-  \item VEM ($k=1$, arbitrary polygons): $L^2$ is $O(h^2)$, $H^1$ is $O(h)$;
+  \item VEM ($k\ge1$, admissible polygons/polyhedra): under regularity and stability assumptions, $L^2$ is $O(h^{k+1})$ and $H^1$ is $O(h^k)$;
   \item RT0$\times$P0: pressure $L^2$ is $O(h)$, flux $L^2$ is $O(h)$.
 \end{itemize}
 Chapter~\ref{chap:error} reports the measured data.
@@ -801,31 +831,74 @@ A \code{Mesh} object stores the following information:
 \centering
 \caption{Main attributes of \code{Mesh}}
 \label{tab:mesh-attrs}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{2.8cm}L{1.9cm}L{9.9cm}@{}}
 \toprule
 Attribute & Type & Meaning \\
 \midrule
-\code{nodes} & \code{(n\_nodes, dim)} array & vertex coordinates \\
-\code{elements} & \code{list[ndarray]} & vertex indices of each cell, \textbf{ragged} \\
-\code{element\_type} & \code{str} & \code{interval}/\code{triangle}/\code{quad}/\code{tet}/\code{hex}/\code{polygon}/\code{polyhedron} \\
-\code{boundary\_nodes} & \code{ndarray} & boundary vertex indices (determined automatically from the facet topology) \\
+\code{nodes} & \code{(n\_\allowbreak nodes,\allowbreak  dim)} array & vertex coordinates \\
+\code{elements} & \code{list[}\allowbreak\code{ndarray]} & vertex indices of each cell, \textbf{ragged} \\
+\code{element\_\allowbreak type} & \code{str} & \code{interval}/\allowbreak\code{triangle}/\allowbreak\code{quad}/\allowbreak\code{tet}/\allowbreak\code{hex}/\allowbreak\code{polygon}/\allowbreak\code{polyhedron} \\
+\code{boundary\_\allowbreak nodes} & \code{ndarray} & boundary vertex indices (determined automatically from the facet topology) \\
 \code{dim} & \code{int} & spatial dimension \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{important}
 \code{elements} is deliberately a \textbf{ragged list}: triangles, quadrilaterals,
 pentagons, Voronoi polygons, tetrahedra and hexahedra can therefore share a single
 assembly loop. When all cells have the same number of vertices, a
-\code{(n\_cells, k)} array view can be obtained through \code{mesh.uniform\_vertices}.
+\code{(n\_\allowbreak cells,\allowbreak  k)} array view can be obtained through \code{mesh.uniform\_\allowbreak vertices}.
 \end{important}
+
+\subsection{VEM Mesh Generality and Refinement}
+\label{sec:vem-mesh-general}
+Ragged \code{elements} supports cells with different vertex counts. In 3D,
+\code{faces} accepts either a common \code{faces[face][vertex]} template or
+per-cell \code{faces[cell]}\allowbreak\code{[face][vertex]} tables, using cell-local vertex indices.
+Explicit faces take precedence over inference by vertex count: eight vertices may
+describe a heptagonal pyramid rather than a hexahedron.
+\code{mesh.get\_\allowbreak cell\_\allowbreak faces(c)} returns the actual cell faces.
+
+\begin{lstlisting}[language=MosicaFE,caption={Polygonal and polyhedral mesh entry points}]
+mesh2 = Mesh.voronoi_polygon(n_points=1024, seed=42)
+mesh3 = Mesh.voronoi_polyhedron(n_points=192, seed=42)
+# Common template: faces[face][vertex].
+# Per-cell faces: faces[cell][face][vertex].
+# mesh3 = Mesh(nodes, elements, element_type="polyhedron", faces=faces)
+\end{lstlisting}
+
+\textbf{Current geometric requirements:} 2D cells and 3D faces are straight-sided,
+planar polygons whose vertex mean lies strictly inside their star kernel. The same
+star-shaped condition applies to 3D volumes. A volume boundary must be closed,
+connected and orientable, with exactly two faces incident on each surface edge.
+Concave cells satisfying these requirements are allowed. A shared face must have
+identical global vertices and the same boundary cycle, with at most two owning
+cells. Edge adjacency propagates face orientation; signed volume selects outward
+normals. Holes, curved edges and nonplanar faces are unsupported; cracks, overlaps
+and hanging nodes are not repaired automatically.
+
+The 2D Voronoi generator uses eight mirrored directions; the 3D generator uses
+26 mirrored groups and is implemented in \path{core/polyhedral.py}, requiring SciPy.
+Volumes and quadrature use tetrahedron fans of the actual faces.
+
+For structured grids, \code{refine\_\allowbreak uniform()} doubles the intervals in each
+direction. For Voronoi grids, increase \code{n\_\allowbreak points} and regenerate the mesh.
+Even with the same seed these are nonnested grids, without parent--child maps or
+solution transfer. Local adaptive refinement is not implemented.
+\code{get\_\allowbreak mesh\_\allowbreak size()} returns the maximum cell diameter; $N^{-1/d}$ is only a
+typical scale, not its exact value.
 
 \subsection{Facets}
 
 Codimension-one cell faces (facets) are the basis of boundary detection: in 1D a
-facet is an endpoint, in 2D an edge, and in 3D a triangular or quadrilateral face.
-\code{mesh.facets} returns all facets, \code{mesh.boundary\_facets} returns those
+facet is an endpoint, in 2D an edge, and in 3D a planar polygonal face.
+\code{mesh.facets} returns all facets, \code{mesh.boundary\_\allowbreak facets} returns those
 owned by exactly one cell, and their vertex set is where the Dirichlet boundary
 lives.
 
@@ -833,16 +906,16 @@ lives.
 For a two-dimensional polygonal mesh, facets are exactly the edges of the polygons;
 for hexahedral meshes they are expanded from a fixed table of six faces; for general
 three-dimensional polyhedra a face table can be supplied explicitly through
-\code{Mesh(..., faces=...)}.
+\code{Mesh(...,\allowbreak  faces=...)}.
 \end{property}
 
 \begin{caution}
 The \code{mesh.facets} described above is a ``\textbf{vertex set used for boundary
-detection}''; it is sufficient for Lagrange and virtual elements (whose degrees of
-freedom live on the vertices). An $H(\mathrm{div})$-conforming mixed element (RT0),
+detection}''; high-order VEM also shares edge points and face moments through
+its own entity map. Boundary values include normalized face moments. An $H(\mathrm{div})$-conforming mixed element (RT0),
 however, additionally needs to know ``\textbf{which cells share a given face}'' and
 ``toward which cell the global normal of that face points''. The library therefore
-provides a second layer of facet topology: \code{core/facets.py}. The next
+provides a second layer of facet topology: \path{core/facets.py}. The next
 subsection shows how to use it.
 \end{caution}
 
@@ -853,24 +926,29 @@ The RT0 degrees of freedom are \textbf{facet normal fluxes}
 $\Phi_f=\int_f q\cdot n_f\dif s$, and two neighbouring cells must share the same
 unknown. This requires an explicit global numbering and orientation of the facets.
 The library makes this a first-class citizen of the \code{core} layer,
-\code{FacetTopology} (\code{mesh.facet\_topology}, built lazily and cached):
+\code{FacetTopology} (\code{mesh.facet\_\allowbreak topology}, built lazily and cached):
 
 \begin{table}[htbp]
 \centering
 \caption{Main attributes of \code{FacetTopology} (\code{t = mesh.facet\_topology})}
 \label{tab:facettopo}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{4.4cm}L{10.0cm}@{}}
 \toprule
 Attribute / method & Meaning \\
 \midrule
-\code{t.facets} & \code{(n\_facets, d)}: \textbf{sorted} vertex list of each facet (the global unique key) \\
-\code{t.cell\_facets} & \code{(n\_cells, d+1)}: \code{[c,i]} is the global index of the $i$-th local facet of cell $c$ \\
+\code{t.facets} & \code{(n\_\allowbreak facets,\allowbreak  d)}: \textbf{sorted} vertex list of each facet (the global unique key) \\
+\code{t.cell\_\allowbreak facets} & \code{(n\_\allowbreak cells,\allowbreak  d+1)}: \code{[c,\allowbreak i]} is the global index of the $i$-th local facet of cell $c$ \\
 \code{t.signs} & $\pm1$: whether the global normal points out of that cell \\
 \code{t.normals} & unnormalized global normals (magnitude $=$ facet measure) \\
 \code{t.counts} & number of adjacent cells: 2 for interior facets, 1 for boundary facets \\
-\code{t.boundary\_facets()} & array of boundary facet indices (\code{t.n\_boundary} is the count) \\
+\code{t.boundary\_\allowbreak facets()} & array of boundary facet indices (\code{t.n\_\allowbreak boundary} is the count) \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{lstlisting}[language=MosicaFE,caption={Facet topology and orientation}]
@@ -891,7 +969,7 @@ print(t.signs[c0][list(t.cell_facets[c0]).index(0)] *
 \end{lstlisting}
 
 \begin{important}
-\code{build\_facet\_topology} rejects two kinds of input that would ``silently give
+\code{build\_\allowbreak facet\_\allowbreak topology} rejects two kinds of input that would ``silently give
 wrong results'': non-simplicial meshes (quadrilaterals / polygons / hexahedra), and
 meshes with a facet shared by more than two cells (non-conforming partitions). This
 is the technical reason why RT0 only accepts triangular and tetrahedral meshes.
@@ -926,24 +1004,30 @@ for m in (m1, m2, m3, m4, m5, m7, m8):
 \centering
 \caption{Mesh factory quick reference}
 \label{tab:mesh-factories}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{6.4cm}L{1.9cm}L{6.3cm}@{}}
 \toprule
 Factory & Domain & Cells \\
 \midrule
-\code{Mesh.interval(a,b,nx)} & $[a,b]$ & segments \\
-\code{Mesh.rectangle(...,"triangle")} & rectangle & triangles \\
-\code{Mesh.rectangle(...,"quad")} & rectangle & quadrilaterals \\
-\code{Mesh.box(...,"tet")} & box & tetrahedra \\
-\code{Mesh.box(...,"hex")} & box & hexahedra \\
-\code{Mesh.pentagon(nx,ny)} & unit square & pentagons \\
-\code{Mesh.voronoi\_polygon(...)} & unit square & Voronoi polygons \\
-\code{Mesh.from\_arrays(...)} & user-defined & inferred automatically \\
+\code{Mesh.interval(a,\allowbreak b,\allowbreak nx)} & $[a,b]$ & segments \\
+\code{Mesh.rectangle(...,\allowbreak "triangle")} & rectangle & triangles \\
+\code{Mesh.rectangle(...,\allowbreak "quad")} & rectangle & quadrilaterals \\
+\code{Mesh.box(...,\allowbreak "tet")} & box & tetrahedra \\
+\code{Mesh.box(...,\allowbreak "hex")} & box & hexahedra \\
+\code{Mesh.pentagon(nx,\allowbreak ny)} & unit square & pentagons \\
+\code{Mesh.voronoi\_\allowbreak polygon(...)} & unit square & Voronoi polygons \\
+\code{Mesh.voronoi\_\allowbreak polyhedron(...)} & unit cube & Voronoi polyhedra \\
+\code{Mesh.from\_\allowbreak arrays(...)} & user-defined & inferred automatically \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{remark}[Kuhn subdivision]
-By default \code{Mesh.box(...,element\_type="tet")} splits every small cube into 6
+By default \code{Mesh.box(...,\allowbreak element\_\allowbreak type="tet")} splits every small cube into 6
 tetrahedra \textbf{sharing the main diagonal} (Kuhn subdivision). The triangulations
 of the common face of two neighbouring cubes then agree, so the mesh is conforming.
 \code{pattern="center"} additionally inserts the cube centre and splits into 12
@@ -982,7 +1066,7 @@ fine = coarse.refine_uniform()
 print(coarse.n_cells, fine.n_cells)     # 32 128
 \end{lstlisting}
 
-\code{refine\_uniform()} is available for structured meshes only (\code{interval} /
+\code{refine\_\allowbreak uniform()} is available for structured meshes only (\code{interval} /
 \code{rectangle} / \code{box} / \code{pentagon}): it doubles the number of cells in
 every direction and regenerates the mesh, so the number of triangles is multiplied
 by 4 and the number of hexahedra by 8. For unstructured meshes such as Voronoi
@@ -994,6 +1078,7 @@ meshes it raises a \code{ValueError}.
 \centering
 \caption{Reference element conventions}
 \label{tab:refelem}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}ll@{}}
 \toprule
 Cell type & Reference element \\
@@ -1005,6 +1090,10 @@ Cell type & Reference element \\
 \code{hex} & $[0,1]^3$: counterclockwise 4 vertices on $z=0$, then the matching 4 on $z=1$ \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 Simplex cells use the affine map $x=v_0+J_K\hat x$; quadrilaterals and hexahedra use
@@ -1026,7 +1115,7 @@ print(apply_affine_map([[0.5,0.5]], quad))   # [[1, 1]]
 \end{lstlisting}
 
 \begin{caution}
-\textbf{The Jacobian convention.} \code{compute\_jacobian} returns the
+\textbf{The Jacobian convention.} \code{compute\_\allowbreak jacobian} returns the
 \textbf{same convention} of Jacobian for both families of cells: columns are partial
 derivatives of physical coordinates with respect to reference coordinates,
 
@@ -1038,7 +1127,7 @@ J=\big[\ \partial x/\partial\xi_1\ \ \cdots\ \ \partial x/\partial\xi_d\ \big],
 \end{equation}
 
 and only with this convention are the gradient transformation
-\code{transform\_gradient(dN, J)} (which uses $J^{-\top}$ internally) and the Newton
+\code{transform\_\allowbreak gradient(dN,\allowbreak  J)} (which uses $J^{-\top}$ internally) and the Newton
 inverse map of quadrilaterals / hexahedra (which uses $J^{-1}$) correct.
 \textbf{Do not write $dN^{\top}V$ when extending the code} --- that is the transposed
 Jacobian. For axis-aligned rectangles and boxes $J$ is diagonal and symmetric, so
@@ -1046,7 +1135,7 @@ the error is completely hidden; but as soon as a mesh is \textbf{rotated or
 distorted} ($J\ne J^{\top}$) the gradients, the stiffness matrix and the
 interpolation are silently wrong. This library fixed exactly this issue on
 2026-09-21 (bug number 7); the regression test is
-\code{tests/test\_tensor\_geometry.py}, which checks $J$ against finite differences
+\path{tests/test_tensor_geometry.py}, which checks $J$ against finite differences
 and verifies that the errors are identical bit by bit under rotations of
 $0^\circ/15^\circ/30^\circ/45^\circ$.
 \end{caution}
@@ -1073,6 +1162,7 @@ print(w.sum(), mesh.get_cell_measure(0))
 \centering
 \caption{Available quadrature rules (\code{order} is the degree of the polynomial to be integrated exactly)}
 \label{tab:quad}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lll@{}}
 \toprule
 Cell & Rule & Remarks \\
@@ -1084,13 +1174,17 @@ Cell & Rule & Remarks \\
 \code{hex} & tensor-product Gauss & $n$ points per direction \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{caution}
 For tensor-product cells the quadrature order has to be understood
 \textbf{per direction}. The integrand of the \code{Q1} stiffness matrix is quadratic
 in each direction, so at least 2 Gauss points per direction are needed --- \mosica{}
-automatically rounds the order up to \code{max(2, 2*p)}, which the user normally does
+automatically rounds the order up to \code{max(2,\allowbreak  2*p)}, which the user normally does
 not have to specify. Earlier versions used one point too few here, which made the
 computed convergence order of 3D hexahedral elements negative.
 \end{caution}
@@ -1108,23 +1202,28 @@ interface} to the layers above:
 \centering
 \caption{Key methods of \code{BaseFESpace}}
 \label{tab:space-api}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{6.2cm}L{9.2cm}@{}}
 \toprule
 Method & Meaning \\
 \midrule
-\code{stiffness\_matrix()} & $A_{ij}=\int\nabla\varphi_j\cdot\nabla\varphi_i$ \\
-\code{mass\_matrix()} & $M_{ij}=\int\varphi_j\varphi_i$ \\
-\code{load\_vector(f)} & $b_i=\int f\varphi_i$ \\
-\code{boundary\_dofs()} & indices of the Dirichlet degrees of freedom \\
+\code{stiffness\_\allowbreak matrix()} & $A_{ij}=\int\nabla\varphi_j\cdot\nabla\varphi_i$ \\
+\code{mass\_\allowbreak matrix()} & $M_{ij}=\int\varphi_j\varphi_i$ \\
+\code{load\_\allowbreak vector(f)} & $b_i=\int f\varphi_i$ \\
+\code{boundary\_\allowbreak dofs()} & indices of the Dirichlet degrees of freedom \\
 \code{interpolate(f)} & interpolate a function onto the degrees of freedom \\
-\code{evaluate(cell,u,pts)} & reconstruct a function from the degrees of freedom inside a cell and evaluate it \\
-\code{evaluate\_gradient(cell,u,pts)} & as above, returning the gradient \\
-\code{nodal\_values(u)} & map a degree-of-freedom vector back to the mesh nodes (for visualization) \\
-\code{get\_cell\_dofs(i)} & global indices of the degrees of freedom of cell $i$ \\
-\code{get\_dof\_coordinates(k)} & physical coordinates of degree of freedom $k$ \\
-\code{eval\_basis(xi)} / \code{eval\_basis\_grad(xi)} & basis functions on the reference element (explicit-basis spaces only) \\
+\code{evaluate(cell,\allowbreak u,\allowbreak pts)} & reconstruct a function from the degrees of freedom inside a cell and evaluate it \\
+\code{evaluate\_\allowbreak gradient(cell,\allowbreak u,\allowbreak pts)} & as above, returning the gradient \\
+\code{nodal\_\allowbreak values(u)} & map a degree-of-freedom vector back to the mesh nodes (for visualization) \\
+\code{get\_\allowbreak cell\_\allowbreak dofs(i)} & global indices of the degrees of freedom of cell $i$ \\
+\code{get\_\allowbreak dof\_\allowbreak coordinates(k)} & physical coordinates of degree of freedom $k$ \\
+\code{eval\_\allowbreak basis(xi)} / \code{eval\_\allowbreak basis\_\allowbreak grad(xi)} & basis functions on the reference element (explicit-basis spaces only) \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{important}
@@ -1206,49 +1305,56 @@ print(V2.boundary_dofs()[:6])
 
 \section{Virtual Element Spaces}
 
-\begin{lstlisting}[language=MosicaFE,caption={Virtual element space (arbitrary polygons)}]
+\begin{lstlisting}[language=MosicaFE,caption={Arbitrary-order VEM space and constant-function check}]
+import numpy as np
 from MosicaFE import Mesh, FESpace
 
-mesh = Mesh.voronoi_polygon(n_points=100, seed=0)
-V = FESpace.vem(mesh)                       # k = 1, vertex DOFs only
-
-print(V.n_dofs, mesh.n_nodes)               # equal
-K = V.stiffness_matrix()                    # projection + stabilization
+mesh = Mesh.voronoi_polygon(n_points=100, seed=42)
+k = 3
+V = FESpace.vem(mesh, degree=k)
+# Equivalent: FESpace.create(mesh, family="vem", degree=k)
+print(V.n_dofs, mesh.n_nodes)
+A = V.stiffness_matrix()
 M = V.mass_matrix()
 b = V.load_vector(lambda x: 1.0)
-
-print("row sums of M equal b?",
-      abs(b - M.sum(axis=1)).max() < 1e-12)
+one = V.interpolate(lambda x: 1.0)
+print(np.max(np.abs(M @ one - b)))
 \end{lstlisting}
 
+\code{degree} must be a positive integer and defaults to 1; \code{element="VEM3"}
+is another spelling. At $k\ge2$, \code{u} includes moments, so the number of unknowns
+usually exceeds the number of vertices. \code{V.interpolate} evaluates every
+functional. The moment entries of a constant are not all 1: check $M\mathbf 1_{\rm dof}=b$
+as above, rather than matrix row sums. \code{V.nodal\_\allowbreak values(u)} returns the actual
+vertex values and is suitable for reporting their range.
+
 \begin{property}
-The stiffness matrix of \code{VEMSpace} is
-\begin{enumerate}[label=(\arabic*),itemsep=0.1em]
-  \item symmetric (because the stabilization is written as a Gram matrix);
-  \item positive semi-definite, with the constant functions in its kernel;
-  \item linearly exact (applying the cell matrix to any vector of linear degrees of
-        freedom gives the energy $\int_K|\nabla p|^2$).
-\end{enumerate}
-Item (3) is exactly the ``patch test'', whose importance is explained in
-Section~\ref{sec:pitfall-vem}.
+On admissible meshes with adequate quadrature, the default local stiffness is
+symmetric positive semi-definite, contains constants in its kernel, and is
+consistent on all of $\mathcal P_k$. Appropriate Dirichlet conditions allow direct
+or SPD iterative solution. Polynomial consistency tests currently cover $k\le5$.
+There is no artificial degree cap; conditioning worsens at high order, which is
+not a claim that every arbitrarily high degree has been validated.
 \end{property}
 
 \begin{table}[htbp]
 \centering
-\caption{The \code{stabilization} options of \code{VEMSpace}}
+\caption{Stabilization options}
 \label{tab:stab}
-\begin{tabular}{@{}lp{8.6cm}@{}}
+\begin{lrbox}{\guideTableBox}
+\begin{tabular}{@{}lp{9cm}@{}}
 \toprule
 Value & Meaning \\
 \midrule
-\code{"trace"} (default) & $\sigma(I-\Pi_{\rm dof})^{\top}(I-\Pi_{\rm dof})$,
-symmetric positive semi-definite, $\sigma$ given by the trace ratio. Recommended \\
-\code{"legacy"} & $(I-\Pi_{\rm dof})/n$ from the early scripts, skew, diverges on
-irregular polygons; use only to reproduce old results \\
-\code{"none"} & the projection term $A_{\rm proj}$ alone. The cell matrices are
-singular; for diagnostics only, never for solving \\
+\code{"trace"} & Default; symmetric stabilization with trace scaling \\
+\code{"legacy"} & Compatibility alias for trace \\
+\code{"none"} & Projection term only; diagnostics \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \section{RT0\texorpdfstring{$\times$}{x}P0 Mixed Space}
@@ -1275,20 +1381,25 @@ blocks of a saddle-point problem'':
 \centering
 \caption{Matrix primitives of RT0$\times$P0 (combined by the physics layer)}
 \label{tab:rt0-blocks}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{5.4cm}L{2.9cm}L{6.1cm}@{}}
 \toprule
 Method & Shape & Meaning \\
 \midrule
-\code{V.flux\_mass\_matrix()} & $(\Phi,\Phi)$ & $M_{ij}=\int_K\varphi_i\cdot\varphi_j$, \textbf{closed form, exact}, no quadrature needed \\
-\code{V.divergence\_matrix()} & $(P,\Phi)$ & $B_{K,i}=\int_K\nabla\cdot\varphi_i=\sigma_{K,i}$, always $\pm1$ \\
-\code{V.pressure\_load\_vector(f)} & $(P,)$ & $\int_K f$ \\
+\code{V.flux\_\allowbreak mass\_\allowbreak matrix()} & $(\Phi,\Phi)$ & $M_{ij}=\int_K\varphi_i\cdot\varphi_j$, \textbf{closed form, exact}, no quadrature needed \\
+\code{V.divergence\_\allowbreak matrix()} & $(P,\Phi)$ & $B_{K,i}=\int_K\nabla\cdot\varphi_i=\sigma_{K,i}$, always $\pm1$ \\
+\code{V.pressure\_\allowbreak load\_\allowbreak vector(f)} & $(P,)$ & $\int_K f$ \\
 \midrule
-\code{V.interpolate\_pressure(f)} & $(P,)$ & cell average of $f$ ($L^2$ projection onto P0) \\
-\code{V.interpolate\_flux(q)} & $(\Phi,)$ & $\Phi_f=\int_f q\cdot n_f\dif s$ \\
-\code{V.evaluate\_flux(c,Q,pts)} & $(n_q,d)$ & reconstruct $q_h=\sum_i F_i\varphi_i$ in a cell \\
-\code{V.locate\_cell(x)} & int & locate the cell containing a point via barycentric coordinates \\
+\code{V.interpolate\_\allowbreak pressure(f)} & $(P,)$ & cell average of $f$ ($L^2$ projection onto P0) \\
+\code{V.interpolate\_\allowbreak flux(q)} & $(\Phi,)$ & $\Phi_f=\int_f q\cdot n_f\dif s$ \\
+\code{V.evaluate\_\allowbreak flux(c,\allowbreak Q,\allowbreak pts)} & $(n_q,d)$ & reconstruct $q_h=\sum_i F_i\varphi_i$ in a cell \\
+\code{V.locate\_\allowbreak cell(x)} & int & locate the cell containing a point via barycentric coordinates \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{lstlisting}[language=MosicaFE,caption={Using the two blocks directly}]
@@ -1306,13 +1417,13 @@ A = bmat([[M, -B.T], [B, None]])  # [[M, -B^T], [B, 0]]
 \end{lstlisting}
 
 \begin{caution}
-The RT0 space \textbf{does not provide} \code{stiffness\_matrix()} /
-\code{mass\_matrix()} / \code{load\_vector()}, nor \code{interpolate()}: it
+The RT0 space \textbf{does not provide} \code{stiffness\_\allowbreak matrix()} /
+\code{mass\_\allowbreak matrix()} / \code{load\_\allowbreak vector()}, nor \code{interpolate()}: it
 corresponds to a saddle-point problem and carries two fields at once, so there is no
 ``single operator'' and no ``single interpolation''. Calling those methods raises a
 \code{NotImplementedError} whose message points to the method to use instead (for
-example \code{mass\_matrix()} $\to$ \code{flux\_mass\_matrix()},
-\code{load\_vector()} $\to$ \code{pressure\_load\_vector()}). In day-to-day use,
+example \code{mass\_\allowbreak matrix()} $\to$ \code{flux\_\allowbreak mass\_\allowbreak matrix()},
+\code{load\_\allowbreak vector()} $\to$ \code{pressure\_\allowbreak load\_\allowbreak vector()}). In day-to-day use,
 combine the space with \code{MixedPoissonProblem}.
 \end{caution}
 
@@ -1324,28 +1435,33 @@ from MosicaFE import Mesh, FESpace
 mesh = Mesh.rectangle(nx=16, ny=16)
 
 V_fem = FESpace.lagrange(mesh, degree=2)    # P2
-V_vem = FESpace.vem(mesh, degree=1)         # VEM k=1
+V_vem = FESpace.vem(mesh, degree=3)         # VEM k=3
 V_rt0 = FESpace.rt0(mesh)                   # RT0 x P0
 
 # by name (used by solve_poisson(element=...))
 print(FESpace.available())
-V_any = FESpace.create(mesh, family="vem", degree=1)
+V_any = FESpace.create(mesh, family="vem", degree=3)
 \end{lstlisting}
 
 \begin{table}[htbp]
 \centering
 \caption{String names of the ``elements'' (used by \code{solve\_poisson(element=...)})}
 \label{tab:elem-names}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{3.6cm}L{3.6cm}L{6.2cm}@{}}
 \toprule
 Name & Space family & Available meshes \\
 \midrule
 \code{"P1"} / \code{"P2"} & Lagrange & triangles, tetrahedra \\
 \code{"Q1"} / \code{"Q2"} & Lagrange (tensor product) & quadrilaterals, hexahedra \\
-\code{"VEM"} / \code{"VEM1"} & virtual elements, $k=1$ & arbitrary polygons / polyhedra \\
+\code{"VEM"} / \code{"VEM3"} & VEM, $k\ge1$ & admissible polygons / polyhedra \\
 \code{"RT0"} / \code{"RT0-P0"} / \code{"MIXED"} & RT0$\times$P0 & triangles, tetrahedra \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 % ===========================================================================
@@ -1427,7 +1543,7 @@ class HelmholtzProblem(BasePhysics):
 \end{lstlisting}
 
 The class is a subclass of \code{BasePhysics}, so it inherits \code{solve},
-\code{compute\_error}/\code{compute\_errors} and everything else unchanged; the
+\code{compute\_\allowbreak error}/\allowbreak\code{compute\_\allowbreak errors} and everything else unchanged; the
 only thing that had to be supplied is the combination of the two matrices that the
 space already computed. Consequently the Helmholtz problem accepts \textbf{every
 H1-conforming space}, exactly as the Poisson problem does:
@@ -1469,7 +1585,7 @@ than of the library.
         $k$ and a real constant $\kappa$ and rejects anything else with an explicit
         error message rather than assembling a matrix silently. The variant
         $-\Delta u+k^2u=f$ (the screened Poisson equation) is the built-in
-        \code{ReactionDiffusionProblem} with \code{reaction\_coeff=k**2}; complex
+        \code{ReactionDiffusionProblem} with \code{reaction\_\allowbreak coeff=k**2}; complex
         wavenumbers (absorbing media) would require a complex-valued pipeline and
         are outside the current scope.
 \end{enumerate}
@@ -1484,6 +1600,7 @@ the interior degrees of freedom.
 \centering
 \caption{Helmholtz verification ($k=1$, $u=\sin(\pi x)\sin(\pi y)$, constant wavenumber)}
 \label{tab:helmholtz-verification}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Space / mesh & $L^2$ order & $H^1$ order & $k^2/\lambda_{1,h}$ & $kh$ range \\
@@ -1494,6 +1611,10 @@ Q1 / quadrilaterals & 2.00 & 1.00 & 0.0507 & $0.25\to0.031$ \\
 VEM $k=1$ / triangles & 1.98 & 0.99 & 0.0505 & $0.25\to0.031$ \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 The measured orders coincide with the Poisson ones, which is the point: in the
@@ -1540,7 +1661,7 @@ $2.875$.
 
 \begin{itemize}[itemsep=0.2em]
   \item \textbf{Neumann conditions}: add $\int_{\Gamma_N}h\varphi_i\dif s$ to the
-        result of \code{load\_vector}; this requires a quadrature rule on the
+        result of \code{load\_\allowbreak vector}; this requires a quadrature rule on the
         boundary facets;
   \item \textbf{RT0 mixed form:} $p=0$ is a natural boundary condition, so no degree
         of freedom has to be eliminated (which is also why mixed formulations are
@@ -1556,11 +1677,11 @@ $2.875$.
 \caption{Global assembly (\code{BaseFESpace.\_assemble} in \mosica{})}
 \label{alg:assembly}
 \begin{algorithmic}[1]
-\REQUIRE space $V$, cell-local matrix generator \code{local\_matrix(cell)}
-\STATE initialize the triplet lists \code{rows, cols, vals}
+\REQUIRE space $V$, cell-local matrix generator \code{local\_\allowbreak matrix(cell)}
+\STATE initialize the triplet lists \code{rows,\allowbreak  cols,\allowbreak  vals}
 \FOR{each cell $c=0,\dots,n_{\rm cells}-1$}
-    \STATE $\mathcal{D}_c\leftarrow$\code{get\_cell\_dofs(c)}
-    \STATE $K_c\leftarrow$\code{local\_matrix(c)}
+    \STATE $\mathcal{D}_c\leftarrow$\code{get\_\allowbreak cell\_\allowbreak dofs(c)}
+    \STATE $K_c\leftarrow$\code{local\_\allowbreak matrix(c)}
     \STATE append the flattened row / column indices of $\mathcal{D}_c$ and $K_c$ to
            the triplet lists
 \ENDFOR
@@ -1662,23 +1783,28 @@ u = problem.solve(method="auto")   # auto/direct/cg/gmres/bicgstab/minres
 \centering
 \caption{Available Krylov solvers}
 \label{tab:krylov}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llp{6.4cm}@{}}
 \toprule
 Method & Applicable matrices & Remarks \\
 \midrule
-\code{conjugate\_gradient} & symmetric positive definite & $O(\mathrm{nnz})$ per step, iteration count $O(\sqrt{\kappa})$ \\
+\code{conjugate\_\allowbreak gradient} & symmetric positive definite & $O(\mathrm{nnz})$ per step, iteration count $O(\sqrt{\kappa})$ \\
 \code{gmres} & general (nonsymmetric) & with restarts, storage $O(\text{restart}\times n)$ \\
 \code{bicgstab} & general & two matrix-vector products per step, low memory \\
 \code{minres} & symmetric indefinite & e.g.\ the RT0 saddle-point system \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{caution}
-The conjugate gradient method requires a symmetric positive definite matrix. The
-stiffness matrix of virtual elements is symmetric under the default stabilization,
-but it is no longer symmetric if \code{stabilization="legacy"} is selected, in which
-case CG fails (possibly even without an error message, returning a wrong result).
+CG requires a symmetric positive definite matrix after boundary conditions.
+VEM \code{trace} and \code{legacy} now use the same symmetric stabilization.
+The diagnostic \code{none} option does not generally control the projection kernel.
+
 For saddle-point systems use a direct method or MINRES.
 \end{caution}
 
@@ -1688,6 +1814,7 @@ For saddle-point systems use a direct method or MINRES.
 \centering
 \caption{Solver selection recommendations}
 \label{tab:solver-guide}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llll@{}}
 \toprule
 Problem size & Matrix type & Recommended solver & Remarks \\
@@ -1698,6 +1825,10 @@ $>2\times10^4$ & symmetric indefinite & MINRES or direct & saddle-point problems
 $>2\times10^4$ & nonsymmetric & GMRES / BiCGSTAB & needs a restart parameter \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{lstlisting}[language=MosicaFE,caption={Automatic selection}]
@@ -1744,11 +1875,12 @@ norms = problem.compute_errors(u, exact, exact_grad)
 \end{lstlisting}
 
 \begin{remark}
-Virtual element basis functions have no explicit expression, so
-\code{VEMSpace.evaluate} uses a ``linear least-squares reconstruction from the
-vertex degrees of freedom''. The error of that reconstruction is of the same order
-as $u_h$ itself, so the measured convergence order coincides with the true
-convergence order of $u_h$ (see Section~\ref{sec:verify}).
+\code{VEMSpace.evaluate} uses $\Pi_k^0u_h$; \code{evaluate\_\allowbreak gradient} uses
+$\nabla\Pi_k^\nabla u_h$. The reported errors are computable projection errors,
+not exact errors of the implicit virtual function. \code{H1} is a gradient seminorm
+error and \code{Linf} is a sampled maximum. Moment entries in the solution vector
+are not point values and must not be used to report a function range.
+
 \end{remark}
 
 \section{Convergence Study Framework}
@@ -1783,17 +1915,22 @@ From the errors on two successive levels,
 \end{equation}
 
 A more robust choice is a least-squares fit of $\log e$ against $\log h$ (which is
-how \code{estimate\_convergence\_rate(h, errors)} is implemented); the option
-\code{use\_last=k} restricts the fit to the last $k$ levels in order to approximate
+how \code{estimate\_\allowbreak convergence\_\allowbreak rate(h,\allowbreak  errors)} is implemented); the option
+\code{use\_\allowbreak last=k} restricts the fit to the last $k$ levels in order to approximate
 the asymptotic order.
 
 \section{Measured Verification Results}
 \label{sec:verify}
 
+The table retains the existing FEM/RT0 validation records. Traceable results for
+the updated arbitrary-order VEM appear in Section~\ref{sec:vem-fine-results}.
+
+
 \begin{table}[htbp]
 \centering
 \caption{Measured convergence orders (manufactured solution, successively refined meshes)}
 \label{tab:verify}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llccc@{}}
 \toprule
 Element & Mesh & measured $L^2$ & measured $H^1$ & theory $(L^2/H^1)$ \\
@@ -1802,17 +1939,16 @@ P1 & triangles & 1.98 & 0.99 & 2 / 1 \\
 P2 & triangles & 3.00 & 1.99 & 3 / 2 \\
 Q1 & quadrilaterals & 2.00 & 1.00 & 2 / 1 \\
 Q2 & quadrilaterals & 3.00 & 2.00 & 3 / 2 \\
-VEM $k=1$ & triangles & 1.98 & 0.99 & 2 / 1 \\
-VEM $k=1$ & quadrilaterals & 1.99 & 1.00 & 2 / 1 \\
-VEM $k=1$ & pentagons & 2.00 & 1.00 & 2 / 1 \\
-VEM $k=1$ & Voronoi polygons & 1.97 & 1.01 & 2 / 1 \\
 P1 & tetrahedra & 1.95 & 0.98 & 2 / 1 \\
 Q1 & hexahedra & 2.01 & 1.00 & 2 / 1 \\
-VEM $k=1$ & hexahedra & 1.97 & 0.97 & 2 / 1 \\
 RT0$\times$P0 & triangles (pressure) & 1.00 & --- & 1 \\
 RT0$\times$P0 & triangles (flux) & 1.00 & --- & 1 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 To reproduce the table:
@@ -1841,20 +1977,25 @@ $k^2<\lambda_1$ of Chapter~\ref{sec:helmholtz}.
 \centering
 \caption{Plotting functions in \module{postprocess}}
 \label{tab:plots}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{5.6cm}L{9.8cm}@{}}
 \toprule
 Function & Purpose \\
 \midrule
-\code{plot\_solution(u, mesh, V, ...)} & plot the solution. In 1D a curve; in 2D filled contours or a 3D surface;
+\code{plot\_\allowbreak solution(u,\allowbreak  mesh,\allowbreak  V,\allowbreak  ...)} & plot the solution. In 1D a curve; in 2D filled contours or a 3D surface;
 in 3D a slice $z=\text{const}$. Polygonal meshes are triangulated by a fan from the cell centroids \\
-\code{plot\_mesh(mesh, ...)} & plot the mesh (in 3D a mid-plane slice) \\
-\code{plot\_error(u, mesh, space, exact, ...)} & plot the pointwise error $|u_h-u|$ \\
-\code{plot\_convergence(h, errors, ...)} & log--log convergence curves with reference slopes $O(h^k)$ overlaid \\
-\code{plot\_pressure\_2d(mesh, P, ...)} & piecewise constant RT0 pressure \\
-\code{plot\_flux\_2d(mesh, Q, ...)} & flux arrow plot \\
-\code{compare\_solutions(entries, ...)} & side-by-side comparison of several solutions \\
+\code{plot\_\allowbreak mesh(mesh,\allowbreak  ...)} & plot the mesh (in 3D a mid-plane slice) \\
+\code{plot\_\allowbreak error(u,\allowbreak  mesh,\allowbreak  space,\allowbreak  exact,\allowbreak  ...)} & plot the pointwise error $|u_h-u|$ \\
+\code{plot\_\allowbreak convergence(h,\allowbreak  errors,\allowbreak  ...)} & log--log convergence curves with reference slopes $O(h^k)$ overlaid \\
+\code{plot\_\allowbreak pressure\_\allowbreak 2d(mesh,\allowbreak  P,\allowbreak  ...)} & piecewise constant RT0 pressure \\
+\code{plot\_\allowbreak flux\_\allowbreak 2d(mesh,\allowbreak  Q,\allowbreak  ...)} & flux arrow plot \\
+\code{compare\_\allowbreak solutions(entries,\allowbreak  ...)} & side-by-side comparison of several solutions \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 Common keyword arguments: \code{title=}, \code{filename=} (saves a PNG),
@@ -1951,10 +2092,10 @@ u = p.solve()
 print("FEM P2 :", p.compute_errors(u, exact, grad))
 
 # (b) VEM: only the space changes
-V = FESpace.vem(mesh)
+V = FESpace.vem(mesh, degree=3)
 p = PoissonProblem(V, f=source, g=zero)
 u = p.solve()
-print("VEM k=1:", p.compute_errors(u, exact, grad))
+print("VEM k=3:", p.compute_errors(u, exact, grad))
 
 # (c) RT0 x P0 mixed: space + problem class
 V = FESpace.rt0(mesh)
@@ -1963,46 +2104,153 @@ Q, P = p.solve()
 print("RT0-P0 :", p.compute_errors((Q, P), exact, lambda x: -grad(x)))
 \end{lstlisting}
 
-Output (on a 32$\times$32 mesh):
+The program prints errors for each method. Current fine-grid VEM measurements follow below.
 
-\begin{lstlisting}[style=textout]
-FEM P2 : {'L2': 6.87e-05, 'Linf': 2.41e-03, 'H1': 7.38e-03}
-VEM k=1: {'L2': 1.35e-03, 'Linf': 3.18e-03, 'H1': 1.09e-01}
-RT0-P0 : {'L2': 1.64e-02, 'Linf': 4.55e-02, 'flux_L2': 6.30e-02}
-\end{lstlisting}
+\section[Example 3: VEM in 2D and 3D]{Example 3: Separate 2D and 3D Arbitrary-Order VEM Programs}
+The programs retain the FEM reading order: problem data, mesh, element and solver,
+then visualization. On $(0,1)^d$, use $-\Delta u=f$,
+$u=\prod_{j=1}^d\sin(\pi x_j)$, $f=d\pi^2u$, and zero boundary data.
+Save and run the following as separate scripts under \code{examples}.
+The repository versions, \path{examples/vem_poisson.py} and
+\path{examples/vem_poisson_3d.py}, additionally save mesh images, errors and JSON data.
 
-\section{Example 3: Virtual Elements on a Polygonal Mesh}
-
-\begin{lstlisting}[language=MosicaFE,caption={Voronoi polygonal mesh + convergence study}]
+\begin{lstlisting}[language=MosicaFE,caption={Standalone 2D main program}]
+import os
+import sys
 import numpy as np
-from MosicaFE import FESpace, Mesh, PoissonProblem, convergence_study
-from MosicaFE.postprocess import estimate_convergence_rate, plot_solution
 
-def mesh_factory(level):
-    return Mesh.voronoi_polygon(n_points=50 * 4**level, seed=7)
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+from MosicaFE import Mesh, plot_solution, solve_poisson
 
-def problem_factory(mesh):
-    return PoissonProblem(FESpace.vem(mesh), f=source, g=lambda x: 0.0)
+OUT = os.path.join(HERE, "output", "vem_2d")
+os.makedirs(OUT, exist_ok=True)
 
-h, errors = convergence_study(mesh_factory, problem_factory,
-                              exact, grad, refinement_levels=3,
-                              verbose=True)
-print("L2 rate:", estimate_convergence_rate(h, errors["L2"]))
+# Problem data.
+def exact(x):
+    return np.sin(np.pi*x[0]) * np.sin(np.pi*x[1])
 
-mesh = Mesh.voronoi_polygon(n_points=200, seed=7)
-V = FESpace.vem(mesh)
-u = PoissonProblem(V, f=source, g=lambda x: 0.0).solve()
-plot_solution(u, mesh, V, title="VEM on Voronoi mesh",
-              filename="vem_voronoi.png")
+def source(x):
+    return 2*np.pi**2*exact(x)
+
+def main(n_points=1024, degree=2):
+    # Mesh.
+    mesh = Mesh.voronoi_polygon(n_points=n_points, seed=42)
+    # Element, solver, and solve.
+    out = solve_poisson(mesh, element="VEM", degree=degree,
+                        f=source, g=lambda x: 0.0,
+                        solver="direct", return_all=True)
+    u, V = out["u"], out["space"]
+    # Visualization.
+    plot_solution(u, mesh, V, title=f"VEM{degree} (2D)",
+                  filename=os.path.join(OUT, f"solution_k{degree}.png"))
+    values = V.nodal_values(u)
+    print("DOFs:", u.size, "vertex range:", values.min(), values.max())
+
+if __name__ == "__main__":
+    main()
 \end{lstlisting}
 
-\begin{caution}
-For random Voronoi meshes the maximum cell diameter is a very unstable choice for
-$h$; using the mean cell diameter as the abscissa is preferable, which is achieved
-simply by passing a custom \code{mesh\_factory} to \code{convergence\_study} (the
-example uses \code{mesh.get\_mesh\_size()}; replace it inside the callback for a more
-robust measure).
-\end{caution}
+\begin{lstlisting}[language=MosicaFE,caption={Standalone 3D main program}]
+import os
+import sys
+import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+from MosicaFE import Mesh, plot_solution, solve_poisson
+
+OUT = os.path.join(HERE, "output", "vem_3d")
+os.makedirs(OUT, exist_ok=True)
+
+# Problem data.
+def exact(x):
+    return np.sin(np.pi*x[0]) * np.sin(np.pi*x[1]) * np.sin(np.pi*x[2])
+
+def source(x):
+    return 3*np.pi**2*exact(x)
+
+def main(n_points=192, degree=2):
+    # Mesh.
+    mesh = Mesh.voronoi_polyhedron(n_points=n_points, seed=42)
+    # Element, solver, and solve.
+    out = solve_poisson(mesh, element="VEM", degree=degree,
+                        f=source, g=lambda x: 0.0,
+                        solver="direct", return_all=True)
+    u, V = out["u"], out["space"]
+    # Visualization.
+    plot_solution(u, mesh, V, title=f"VEM{degree} (3D)", z_slice=0.5,
+                  filename=os.path.join(OUT, f"solution_k{degree}.png"))
+    values = V.nodal_values(u)
+    print("DOFs:", u.size, "vertex range:", values.min(), values.max())
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+Change \code{degree} to select the order; \code{main(n\_\allowbreak points=...,\allowbreak  degree=3)} runs
+the cubic method. Defaults are 1024 polygons in 2D and 192 polyhedra in 3D, with
+separate output folders. The 2D display interpolates vertex values. In 3D,
+\code{z\_\allowbreak slice=0.5} cuts the integration tetrahedra with the actual plane and evaluates
+the $L^2$ projection at intersection points.
+\subsection{Fine-Mesh Results and Error Plots}
+\label{sec:vem-fine-results}
+The table uses the saved \path{examples/output/vem_2d/summary.json} and
+\path{examples/output/vem_3d/summary.json}, both with seed 42.
+The reported errors are $\|u-\Pi_k^0u_h\|_{L^2}$ and
+$\|\nabla u-\nabla\Pi_k^\nabla u_h\|_{L^2}$; the $H^1$ column is a seminorm error.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Saved fine-mesh VEM results in 2D and 3D}
+\begin{lrbox}{\guideTableBox}
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+$d$ & $N$ & $k$ & DOFs & $L^2$ & $H^1$ \\
+\midrule
+2 & 256 & 2 & 1539 & $1.952\times10^{-4}$ & $1.328\times10^{-2}$ \\
+2 & 1024 & 2 & 6147 & $2.548\times10^{-5}$ & $3.378\times10^{-3}$ \\
+2 & 1024 & 3 & 11268 & $4.038\times10^{-7}$ & $6.825\times10^{-5}$ \\
+3 & 96 & 2 & 2361 & $7.294\times10^{-3}$ & $1.781\times10^{-1}$ \\
+3 & 192 & 2 & 4977 & $4.015\times10^{-3}$ & $1.212\times10^{-1}$ \\
+3 & 192 & 3 & 10527 & $9.961\times10^{-4}$ & $1.919\times10^{-2}$ \\
+\bottomrule
+\end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
+\end{table}
+
+The dimensions are plotted separately. Each dimension has only two nonnested
+quadratic grids and one cubic fine-grid result. These show refinement and degree
+effects, not an established asymptotic rate. Under the usual mesh regularity,
+solution smoothness, stabilization and quadrature assumptions, the expected orders
+are $O(h^k)$ in $H^1$ and $O(h^{k+1})$ in $L^2$. Conditioning of the high-order
+monomial basis can affect numerical behavior.
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.70\textwidth]{guidebook_assets/solution_2d.png}\par\medskip
+\includegraphics[width=0.92\textwidth]{guidebook_assets/errors_2d.png}
+\caption{2D cubic VEM solution (1024 cells) and error comparison from saved results.}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.70\textwidth]{guidebook_assets/solution_3d.png}\par\medskip
+\includegraphics[width=0.92\textwidth]{guidebook_assets/errors_3d.png}
+\caption{3D cubic VEM solution (192 cells) and error comparison from saved results. The solution shows the actual $z=0.5$ section.}
+\end{figure}
+
+\clearpage
+From the project root, reproduce the default fine-grid examples and check the implementation:
+
+\begin{lstlisting}[style=shell]
+python examples/vem_poisson.py
+python examples/vem_poisson_3d.py
+python tests/run_tests.py
+\end{lstlisting}
 
 \section{Example 4: The Low-Frequency Helmholtz Equation}
 
@@ -2116,7 +2364,7 @@ solution is wrong for inhomogeneous ones.
 exact solution belongs to the discrete space, the numerical solution must be exact.
 
 \textbf{Conclusion}: see equation~\eqref{eq:bc-lift}; step (1) cannot be omitted.
-\mosica{} turns this into a test in \code{tests/test\_core\_spaces.py}.
+\mosica{} turns this into a test in \path{tests/test_core_spaces.py}.
 
 \subsection{Pitfall 2: Insufficient Quadrature Order for Tensor-Product Elements}
 
@@ -2128,38 +2376,20 @@ polynomial in each direction, and with only one Gauss point per direction the ru
 exact only up to degree 1; the under-integration makes the cell matrices
 non-positive-definite and systematically underestimates the energy.
 
-\textbf{Conclusion}: use \code{max(2, 2*p)} as the quadrature order for
+\textbf{Conclusion}: use \code{max(2,\allowbreak  2*p)} as the quadrature order for
 tensor-product elements (at least $p$ points per direction); see the caution after
 Table~\ref{tab:quad}.
 
-\subsection{Pitfall 3: Normalization of the Constant Mode in the VEM Projection}
+\subsection{Pitfall 3: Fixing the Constant in High-Order Projections}
+The constant row of the gradient Gram matrix is zero. Replace it using
+equation~\eqref{eq:vem-const}: vertex mean at $k=1$, true cell mean at $k\ge2$.
+Check $P_\nabla D=I$ and $P_0D=I$ on all of $\mathcal P_k$, rather than linear functions alone.
 
-\textbf{Symptom}: the VEM convergence order is correct on triangular and square
-meshes, but on Voronoi polygonal meshes the $L^2$ order drops from 2 to below 0.5 and
-the error stalls around $10^{-2}$.
-
-\textbf{Diagnosis}: insert a linear exact solution and check whether the numerical
-solution is exact (patch test); it fails on irregular polygons.
-
-\textbf{Conclusion}: the constant mode must be normalized according to
-equation~\eqref{eq:vem-const} so that the projection reproduces linear polynomials
-exactly; otherwise the stabilization penalizes linear functions and consistency is
-lost.
-
-\subsection{Pitfall 4: Geometric Weights in the Load Vector / Mass Matrix}
-
-\textbf{Symptom}: even after fixing the projection, the $L^2$ error on irregular
-polygonal meshes is still too large.
-
-\textbf{Diagnosis}: taking $\int_K\varphi_i=|K|/n$ for every vertex amounts to
-assuming that each vertex ``owns an equal share'' of the cell. That is correct for
-triangles and regular quadrilaterals, but for polygons with very different edge
-lengths the vertices on short edges are strongly overestimated.
-
-\textbf{Conclusion}: switch to the fan-wise linear interpolation of
-equation~\eqref{eq:vem-load}, where the geometric weights are determined by the shape
-of the cell itself. After the fix, the $L^2$ convergence order on Voronoi meshes
-returns to 1.97.
+\subsection{Pitfall 4: Treating Moments as Point Values}
+A moment is $|E|^{-1}\int_Eu m_\alpha$, not the value at the entity center.
+Use the $L^2$ projection in equation~\eqref{eq:vem-load} for load and mass matrices.
+The constant-function check needs \code{V.interpolate} with \code{lambda x: 1.0}, not an array
+of ones. Nonzero Dirichlet data must also set the normalized boundary-face moments.
 
 \subsection{Pitfall 5: Repeated Indices in \code{numpy} Assignment}
 
@@ -2175,7 +2405,7 @@ the last value, whereas COO assembly sums them.
 \section{Mesh Refinement Strategies}
 
 \begin{itemize}[itemsep=0.2em]
-  \item \textbf{Uniform refinement}: \code{mesh.refine\_uniform()}, multiplying the
+  \item \textbf{Uniform refinement}: \code{mesh.refine\_\allowbreak uniform()}, multiplying the
         number of triangles by 4 and of hexahedra by 8;
   \item \textbf{Adaptive refinement (planned)}: based on the residual-type error
         indicator
@@ -2195,10 +2425,10 @@ the last value, whereas COO assembly sums them.
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
   \item assembly accumulates COO triplets and converts them to CSR once, at the end;
   \item basis-function evaluations on the reference element are cached per quadrature
-        point (\code{LagrangeSpace.\_quadrature\_data}), avoiding repeated work in
+        point (\code{LagrangeSpace.\_\allowbreak quadrature\_\allowbreak data}), avoiding repeated work in
         every cell;
   \item for several physical problems on the same mesh, the result of
-        \code{stiffness\_matrix()} can be reused;
+        \code{stiffness\_\allowbreak matrix()} can be reused;
   \item for large problems, switching to an iterative solver is recommended;
   \item for further speedup the cell loop can be vectorized with \code{numba} or by
         ``grouping cells by type and applying batched tensor operations''.
@@ -2229,17 +2459,17 @@ the last value, whereas COO assembly sums them.
 The steps are:
 
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
-  \item create \code{MosicaFE/spaces/yourspace.py} and derive from
+  \item create \path{MosicaFE/spaces/yourspace.py} and derive from
         \code{BaseFESpace};
-  \item implement \code{\_build\_dof\_map()}: build the map from cell-local degrees
-        of freedom to global ones, and fill in \code{n\_dofs}, \code{dof\_support} and
-        \code{dof\_is\_interior};
-  \item implement \code{stiffness\_matrix()}, \code{mass\_matrix()} and
-        \code{load\_vector(f)};
-  \item implement \code{interpolate(f)} and \code{evaluate(cell, u, points)};
+  \item implement \code{\_\allowbreak build\_\allowbreak dof\_\allowbreak map()}: build the map from cell-local degrees
+        of freedom to global ones, and fill in \code{n\_\allowbreak dofs}, \code{dof\_\allowbreak support} and
+        \code{dof\_\allowbreak is\_\allowbreak interior};
+  \item implement \code{stiffness\_\allowbreak matrix()}, \code{mass\_\allowbreak matrix()} and
+        \code{load\_\allowbreak vector(f)};
+  \item implement \code{interpolate(f)} and \code{evaluate(cell,\allowbreak  u,\allowbreak  points)};
   \item register the new family in \code{FESpace.FAMILIES} in
-        \code{spaces/factory.py};
-  \item add a patch test and a convergence-order test under \code{tests/}.
+        \path{spaces/factory.py};
+  \item add a patch test and a convergence-order test under \path{tests/}.
 \end{enumerate}
 
 \begin{lstlisting}[language=MosicaFE,caption={Skeleton of an explicit-basis space},label={lst:newspace}]
@@ -2278,9 +2508,9 @@ class MySpace(BaseFESpace):
 
 \begin{important}
 If the basis functions of the new element are explicit (higher-degree Lagrange
-elements, DG elements, or other tensor-product families), \code{spaces/lagrange.py}
+elements, DG elements, or other tensor-product families), \path{spaces/lagrange.py}
 is a good model: it already implements the generic assembly loop ``evaluate on the
-reference element, then transform cell by cell'', so usually only \code{eval\_basis}
+reference element, then transform cell by cell'', so usually only \code{eval\_\allowbreak basis}
 and the degree-of-freedom layout have to be supplied.
 \end{important}
 
@@ -2306,9 +2536,9 @@ class MyProblem(BasePhysics):
         return self.apply_boundary_conditions(A, b)
 \end{lstlisting}
 
-After registration, \code{available\_problems()} contains \code{"my\_pde"}, and both
-\code{create\_problem("my\_pde", V, ...)} and
-\code{run("my\_pde", mesh, element="VEM", ...)} are immediately available.
+After registration, \code{available\_\allowbreak problems()} contains \code{"my\_\allowbreak pde"}, and both
+\code{create\_\allowbreak problem("my\_\allowbreak pde",\allowbreak  V,\allowbreak  ...)} and
+\code{run("my\_\allowbreak pde",\allowbreak  mesh,\allowbreak  element="VEM",\allowbreak  ...)} are immediately available.
 
 The built-in equations are written exactly after this template, and they are the
 cheapest way to calibrate how much code a new equation really needs:
@@ -2318,11 +2548,11 @@ problem by a single term, $A=\kappa K-k^2M$.
 
 \begin{caution}
 The template above assumes that the right-hand side \emph{is} the load vector of a
-function, \code{space.load\_vector(f)}. Not every physical source fits that shape: a
+function, \code{space.load\_\allowbreak vector(f)}. Not every physical source fits that shape: a
 point source $\delta(x-x_0)$, a boundary term $\int_{\Gamma_N}hv\dif s$, or a
 discontinuous coefficient must be assembled separately and added to \code{b} before
-\code{apply\_boundary\_conditions} is called. A complete worked example is
-\code{examples/custom\_pde.py}, which registers
+\code{apply\_\allowbreak boundary\_\allowbreak conditions} is called. A complete worked example is
+\path{examples/custom_pde.py}, which registers
 \code{PointSourcePoissonProblem($-\Delta u=f+\delta(x-x_0)$)}: for a nodal space the
 identity $\varphi_i(x_0)=\delta_{ij}$ makes the Dirac functional a single entry
 $b_j\mathrel{+}=1$.
@@ -2337,25 +2567,25 @@ RT0$\times$P0 is implemented exactly after this template and can be copied:
 
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
   \item if a new facet degree-of-freedom layout is needed, obtain the facet topology
-        from \code{core/facets.py} first (global facet indices, \code{cell\_facets},
+        from \path{core/facets.py} first (global facet indices, \code{cell\_\allowbreak facets},
         \code{signs});
   \item implement the ``block'' interfaces in the space: here
-        \code{flux\_mass\_matrix()} ($(\Phi,\Phi)$) and \code{divergence\_matrix()}
-        ($(P,\Phi)$), together with \code{pressure\_load\_vector(f)};
+        \code{flux\_\allowbreak mass\_\allowbreak matrix()} ($(\Phi,\Phi)$) and \code{divergence\_\allowbreak matrix()}
+        ($(P,\Phi)$), together with \code{pressure\_\allowbreak load\_\allowbreak vector(f)};
   \item assemble the blocks into a saddle-point matrix in the physics layer with
-        \code{bmat} (from \code{MosicaFE.\_compat}):
-        \code{bmat([[M, -B.T], [B, None]])};
+        \code{bmat} (from \code{MosicaFE.\_\allowbreak compat}):
+        \code{bmat([[M,\allowbreak  -B.T],\allowbreak  [B,\allowbreak  None]])};
   \item to solve, use \code{"direct"}, \code{"schur"} (static condensation) or
         \code{Solver.minres} (symmetric indefinite);
-  \item put the error analysis in \code{postprocess/error.py}, following
-        \code{mixed\_error\_norms} (one set of norms for the pressure and one for the
+  \item put the error analysis in \path{postprocess/error.py}, following
+        \code{mixed\_\allowbreak error\_\allowbreak norms} (one set of norms for the pressure and one for the
         flux).
 \end{enumerate}
 
 \begin{important}
 The \code{physics} layer contains only 6 lines of assembly code (see \code{assemble}
-in \code{physics/mixed\_poisson.py}), while the cell geometry and the numerical
-integration stay entirely in \code{spaces/rt0.py}. Replacing the mixed element (for
+in \path{physics/mixed_poisson.py}), while the cell geometry and the numerical
+integration stay entirely in \path{spaces/rt0.py}. Replacing the mixed element (for
 instance by BDM1, or by the $Q_2\times Q_1$ pair for Stokes) therefore only requires
 providing the new blocks; the physics layer and the postprocessing can be reused
 unchanged.
@@ -2364,8 +2594,8 @@ unchanged.
 \section{Adding a New Mesh Type}
 
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
-  \item add a class method to \code{core/mesh.py} returning
-        \code{Mesh(nodes, elements, element\_type, name=...)};
+  \item add a class method to \path{core/mesh.py} returning
+        \code{Mesh(nodes,\allowbreak  elements,\allowbreak  element\_\allowbreak type,\allowbreak  name=...)};
   \item 2D cells are automatically reordered counterclockwise according to their
         signed area, and 3D tetrahedra according to their volume;
   \item if a 3D cell is neither a tetrahedron nor a hexahedron, supply the face table
@@ -2394,8 +2624,8 @@ The recommended workflow is:
   \item write a \textbf{failing} test first (patch test, convergence order,
         symmetry, ...);
   \item then implement the feature;
-  \item run \code{tests/run\_tests.py} and \code{tests/run\_checks.py};
-  \item update the progress and verification records under \code{progress/}.
+  \item run \path{tests/run_tests.py} and \path{tests/run_checks.py};
+  \item update the progress and verification records under \path{progress/}.
 \end{enumerate}
 
 Every new feature should cover at least:
@@ -2407,7 +2637,7 @@ Every new feature should cover at least:
         the consistency of the row sums of $M$ with $b(f\equiv1)$;
   \item problem level: the patch test (a linear exact solution must be reproduced
         exactly) and the convergence order;
-  \item end to end: the one-line interfaces \code{solve\_poisson} / \code{run} must
+  \item end to end: the one-line interfaces \code{solve\_\allowbreak poisson} / \code{run} must
         work.
 \end{itemize}
 
@@ -2474,7 +2704,8 @@ Check the following, in order:
 \paragraph{Q: How do I choose the polynomial degree?}
 A: In the vast majority of cases P2 / Q2 offers the best accuracy-to-cost ratio; start
 with P1 for a quick check, and switch to quadratic elements once the solution is
-smooth. Virtual elements are currently available only for $k=1$.
+smooth. VEM accepts any positive integer $k$ through \code{degree=k}; high-order
+monomial matrices require attention to conditioning.
 
 \paragraph{Q: When should I use an iterative solver?}
 A: Below roughly $2\times10^4$ degrees of freedom a direct solver is the least
@@ -2482,24 +2713,24 @@ trouble; for larger problems switch to CG (symmetric positive definite) or GMRES
 (general).
 
 \paragraph{Q: What exactly is the difference between VEM and FEM?}
-A: On triangular meshes the $k=1$ virtual element space coincides with the P1 finite
-element space, and the two give identical numerical results (in this library the
-errors agree bit by bit). The advantage of VEM appears on \textbf{general polygonal
-meshes}: it allows a different number of facets per cell and unstructured polygonal
-partitions, whereas classical Lagrange finite elements require a uniform cell shape.
+A: VEM uses implicit basis functions through polynomial projections and stabilization,
+allowing admissible polygons, polyhedra and varying face counts. The triangular
+first-order case is a special case related to P1. Higher-order VEM includes moments
+and is not identical to the same-degree Lagrange element. See
+Section~\ref{sec:vem-mesh-general} for the geometry requirements.
 
 \paragraph{Q: Why does the RT0 solution return two arrays?}
 A: The mixed formulation solves for the flux $q_h$ and the pressure $p_h$
-simultaneously. \code{Q[c,i]} is the outward normal flux on the $i$-th facet of cell
+simultaneously. \code{Q[c,\allowbreak i]} is the outward normal flux on the $i$-th facet of cell
 $c$ (numbered so that facet $i$ is the one ``not containing vertex $i$''), and
 \code{P[c]} is the constant pressure on that cell.
 
 \paragraph{Q: Does RT0 require installing or linking an external program?}
 A: No. RT0$\times$P0 is a native method of \mosica{}: the explicit basis functions
-$\varphi_i=(x-a_i)/(d|K|)$ and the exact mass matrix are in \code{spaces/rt0.py}, the
-facet topology and orientation are in \code{core/facets.py}, the saddle-point
-assembly is in \code{physics/mixed\_poisson.py}, and the error norms are in
-\code{postprocess/error.py}. The dependencies of the library are still just numpy
+$\varphi_i=(x-a_i)/(d|K|)$ and the exact mass matrix are in \path{spaces/rt0.py}, the
+facet topology and orientation are in \path{core/facets.py}, the saddle-point
+assembly is in \path{physics/mixed_poisson.py}, and the error norms are in
+\path{postprocess/error.py}. The dependencies of the library are still just numpy
 (scipy / matplotlib optional), and after \code{import MosicaFE} the call
 \code{FESpace.rt0(mesh)} works directly.
 
@@ -2507,7 +2738,7 @@ assembly is in \code{physics/mixed\_poisson.py}, and the error norms are in
 A: The current version handles steady elliptic problems only. For time-dependent
 problems the method of lines is recommended: space discretization gives
 $M\dot u+Au=b$, and the time direction is advanced with an explicit or implicit
-scheme of your choice. \code{mass\_matrix()} is already provided.
+scheme of your choice. \code{mass\_\allowbreak matrix()} is already provided.
 
 \paragraph{Q: Can nonlinear problems be solved?}
 A: The framework targets linear problems. For nonlinear problems, write a Newton
@@ -2515,7 +2746,7 @@ iteration in the outer loop and use \mosica{} to assemble and solve the Jacobian
 system at every step.
 
 \paragraph{Q: How do I export results to ParaView?}
-A: Use \code{space.nodal\_values(u)} to obtain nodal values, combine them with
+A: Use \code{space.nodal\_\allowbreak values(u)} to obtain nodal values, combine them with
 \code{mesh.nodes} and \code{mesh.elements}, and write a \code{.vtu} or \code{.vtk}
 file yourself; alternatively add an export function to \code{postprocess}.
 
@@ -2539,27 +2770,27 @@ Name & Description \\
 \endhead
 \code{Mesh} & mesh object and factory methods \\
 \code{FESpace} & space factory: \code{lagrange} / \code{vem} / \code{rt0} / \code{create} \\
-\code{FacetTopology}, \code{build\_facet\_topology} & facet topology and orientation (for $H(\mathrm{div})$ spaces) \\
+\code{FacetTopology}, \code{build\_\allowbreak facet\_\allowbreak topology} & facet topology and orientation (for $H(\mathrm{div})$ spaces) \\
 \code{QuadratureRule} & quadrature rules on reference elements \\
-\code{cell\_quadrature(...)} / \code{simplex\_quadrature(...)} & quadrature points and weights on physical cells / arbitrary simplices \\
+\code{cell\_\allowbreak quadrature(...)} / \code{simplex\_\allowbreak quadrature(...)} & quadrature points and weights on physical cells / arbitrary simplices \\
 \code{BaseFESpace} & base class of the spaces \\
 \code{LagrangeSpace} / \code{VEMSpace} / \code{RT0Space} & the three space families \\
-\code{rt0\_flux\_basis}, \code{rt0\_mass\_matrices} & explicit RT0 basis functions and exact mass matrices \\
+\code{rt0\_\allowbreak flux\_\allowbreak basis}, \code{rt0\_\allowbreak mass\_\allowbreak matrices} & explicit RT0 basis functions and exact mass matrices \\
 \code{BasePhysics} & base class of the physics problems \\
 \code{PoissonProblem} & $-\nabla\cdot(\kappa\nabla u)=f$ \\
 \code{MixedPoissonProblem} & RT0$\times$P0 mixed formulation \\
 \code{ReactionDiffusionProblem} & $-\Delta u+cu=f$ \\
 \code{HelmholtzProblem} & $-\nabla\cdot(\kappa\nabla u)-k^2u=f$ (constant $k$) \\
-\code{register\_problem}, \code{create\_problem}, \code{available\_problems} & PDE registry \\
+\code{register\_\allowbreak problem}, \code{create\_\allowbreak problem}, \code{available\_\allowbreak problems} & PDE registry \\
 \code{Solver} & linear solvers (direct / cg / gmres / bicgstab / minres / auto) \\
-\code{compute\_error} / \code{compute\_errors} & error norms \\
-\code{mixed\_error\_norms} & pressure / flux error norms for RT0$\times$P0 \\
-\code{convergence\_study} & convergence studies \\
-\code{estimate\_convergence\_rate} & convergence-order estimation \\
-\code{plot\_solution} / \code{plot\_mesh} / \code{plot\_error} & visualization \\
-\code{plot\_convergence} / \code{plot\_pressure\_2d} / \code{plot\_flux\_2d} & visualization \\
-\code{solve\_poisson} & one-line Poisson solver \\
-\code{solve\_helmholtz} & one-line Helmholtz solver \\
+\code{compute\_\allowbreak error} / \code{compute\_\allowbreak errors} & error norms \\
+\code{mixed\_\allowbreak error\_\allowbreak norms} & pressure / flux error norms for RT0$\times$P0 \\
+\code{convergence\_\allowbreak study} & convergence studies \\
+\code{estimate\_\allowbreak convergence\_\allowbreak rate} & convergence-order estimation \\
+\code{plot\_\allowbreak solution} / \code{plot\_\allowbreak mesh} / \code{plot\_\allowbreak error} & visualization \\
+\code{plot\_\allowbreak convergence} / \code{plot\_\allowbreak pressure\_\allowbreak 2d} / \code{plot\_\allowbreak flux\_\allowbreak 2d} & visualization \\
+\code{solve\_\allowbreak poisson} & one-line Poisson solver \\
+\code{solve\_\allowbreak helmholtz} & one-line Helmholtz solver \\
 \code{run} & solve any registered PDE by name \\
 \bottomrule
 \end{longtable}
@@ -2577,21 +2808,22 @@ Method / attribute & Description \\
 Method / attribute & Description \\
 \midrule
 \endhead
-\code{Mesh.interval(a,b,nx)} & one-dimensional interval mesh \\
-\code{Mesh.rectangle(...)} & two-dimensional rectangular mesh (\code{triangle}/\code{quad}) \\
-\code{Mesh.box(...)} & three-dimensional box mesh (\code{tet}/\code{hex}) \\
-\code{Mesh.pentagon(nx,ny)} & pentagon mesh \\
-\code{Mesh.voronoi\_polygon(...)} & Voronoi polygonal mesh \\
-\code{Mesh.from\_arrays(...)} & custom mesh \\
-\code{mesh.refine\_uniform()} & uniform refinement \\
-\code{mesh.get\_mesh\_size()} & maximum cell diameter $h$ \\
-\code{mesh.get\_cell\_vertices(i)} & coordinates of the cell vertices \\
-\code{mesh.get\_cell\_measure(i)} & cell area / volume \\
-\code{mesh.get\_cell\_diameter(i)} & cell diameter \\
-\code{mesh.get\_cell\_centroid(i)} & cell centroid \\
-\code{mesh.boundary\_nodes} & boundary vertex indices \\
-\code{mesh.boundary\_facets} / \code{mesh.facets} & facet topology \\
-\code{mesh.facet\_topology} & \code{FacetTopology}: global facet indices, shared facets, outward normal signs \\
+\code{Mesh.interval(a,\allowbreak b,\allowbreak nx)} & one-dimensional interval mesh \\
+\code{Mesh.rectangle(...)} & two-dimensional rectangular mesh (\code{triangle}/\allowbreak\code{quad}) \\
+\code{Mesh.box(...)} & three-dimensional box mesh (\code{tet}/\allowbreak\code{hex}) \\
+\code{Mesh.pentagon(nx,\allowbreak ny)} & pentagon mesh \\
+\code{Mesh.voronoi\_\allowbreak polygon(...)} & Voronoi polygonal mesh \\
+\code{Mesh.voronoi\_\allowbreak polyhedron(...)} & Voronoi polyhedral mesh \\
+\code{Mesh.from\_\allowbreak arrays(...)} & custom mesh \\
+\code{mesh.refine\_\allowbreak uniform()} & uniform refinement \\
+\code{mesh.get\_\allowbreak mesh\_\allowbreak size()} & maximum cell diameter $h$ \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak vertices(i)} & coordinates of the cell vertices \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak measure(i)} & cell area / volume \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak diameter(i)} & cell diameter \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak centroid(i)} & cell centroid \\
+\code{mesh.boundary\_\allowbreak nodes} & boundary vertex indices \\
+\code{mesh.boundary\_\allowbreak facets} / \code{mesh.facets} & facet topology \\
+\code{mesh.facet\_\allowbreak topology} & \code{FacetTopology}: global facet indices, shared facets, outward normal signs \\
 \code{mesh.summary()} & one-line summary \\
 \bottomrule
 \end{longtable}
@@ -2609,30 +2841,30 @@ Method & Description \\
 Method & Description \\
 \midrule
 \endhead
-\code{FESpace.lagrange(mesh, degree)} & continuous Lagrange (P1/P2/Q1/Q2) \\
-\code{FESpace.vem(mesh, degree=1)} & virtual elements ($k=1$) \\
+\code{FESpace.lagrange(mesh,\allowbreak  degree)} & continuous Lagrange (P1/P2/Q1/Q2) \\
+\code{FESpace.vem(mesh,\allowbreak  degree=k)} & enhanced VEM (positive integer $k$) \\
 \code{FESpace.rt0(mesh)} & RT0$\times$P0 mixed space \\
-\code{FESpace.create(mesh, family, degree)} & create by name \\
+\code{FESpace.create(mesh,\allowbreak  family,\allowbreak  degree)} & create by name \\
 \code{FESpace.available()} & available space families \\
-\code{V.n\_dofs} & number of degrees of freedom \\
-\code{V.get\_cell\_dofs(i)} & cell-local $\to$ global degrees of freedom \\
-\code{V.get\_dof\_coordinates(k)} & coordinates of a degree of freedom \\
-\code{V.boundary\_dofs()} & Dirichlet degrees of freedom \\
-\code{V.eval\_basis(xi)} / \code{V.eval\_basis\_grad(xi)} & basis functions on the reference element \\
-\code{V.stiffness\_matrix()} & stiffness matrix \\
-\code{V.mass\_matrix()} & mass matrix \\
-\code{V.load\_vector(f)} & load vector \\
+\code{V.n\_\allowbreak dofs} & number of degrees of freedom \\
+\code{V.get\_\allowbreak cell\_\allowbreak dofs(i)} & cell-local $\to$ global degrees of freedom \\
+\code{V.get\_\allowbreak dof\_\allowbreak coordinates(k)} & coordinates of a degree of freedom \\
+\code{V.boundary\_\allowbreak dofs()} & Dirichlet degrees of freedom \\
+\code{V.eval\_\allowbreak basis(xi)} / \code{V.eval\_\allowbreak basis\_\allowbreak grad(xi)} & basis functions on the reference element \\
+\code{V.stiffness\_\allowbreak matrix()} & stiffness matrix \\
+\code{V.mass\_\allowbreak matrix()} & mass matrix \\
+\code{V.load\_\allowbreak vector(f)} & load vector \\
 \code{V.interpolate(f)} & interpolation \\
-\code{V.evaluate(c, u, pts)}, \code{V.evaluate\_gradient(...)} & reconstruction and evaluation inside a cell \\
-\code{V.nodal\_values(u)} & nodal values (for visualization) \\
+\code{V.evaluate(c,\allowbreak  u,\allowbreak  pts)}, \code{V.evaluate\_\allowbreak gradient(...)} & reconstruction and evaluation inside a cell \\
+\code{V.nodal\_\allowbreak values(u)} & nodal values (for visualization) \\
 \midrule
-\code{V.flux\_mass\_matrix()} & RT0: the $(\Phi,\Phi)$ block (exact closed-form mass matrix) \\
-\code{V.divergence\_matrix()} & RT0: the $(P,\Phi)$ block (divergence, always $\pm1$) \\
-\code{V.pressure\_load\_vector(f)} & RT0: right-hand side $\int_K f$ of the pressure equation \\
-\code{V.interpolate\_pressure(f)} / \code{V.interpolate\_flux(q)} & RT0: interpolation of each of the two fields \\
-\code{V.evaluate\_flux(c, Q, pts)} & RT0: reconstruction of $q_h$ inside a cell \\
-\code{V.locate\_cell(x)} & RT0: locate the cell containing a point \\
-\code{V.n\_flux} / \code{V.n\_pressure} / \code{V.topology} & RT0: sizes and facet topology \\
+\code{V.flux\_\allowbreak mass\_\allowbreak matrix()} & RT0: the $(\Phi,\Phi)$ block (exact closed-form mass matrix) \\
+\code{V.divergence\_\allowbreak matrix()} & RT0: the $(P,\Phi)$ block (divergence, always $\pm1$) \\
+\code{V.pressure\_\allowbreak load\_\allowbreak vector(f)} & RT0: right-hand side $\int_K f$ of the pressure equation \\
+\code{V.interpolate\_\allowbreak pressure(f)} / \code{V.interpolate\_\allowbreak flux(q)} & RT0: interpolation of each of the two fields \\
+\code{V.evaluate\_\allowbreak flux(c,\allowbreak  Q,\allowbreak  pts)} & RT0: reconstruction of $q_h$ inside a cell \\
+\code{V.locate\_\allowbreak cell(x)} & RT0: locate the cell containing a point \\
+\code{V.n\_\allowbreak flux} / \code{V.n\_\allowbreak pressure} / \code{V.topology} & RT0: sizes and facet topology \\
 \bottomrule
 \end{longtable}
 \endgroup
@@ -2649,19 +2881,19 @@ Method & Description \\
 Method & Description \\
 \midrule
 \endhead
-\code{PoissonProblem(V, f, g, kappa)} & constructor \\
+\code{PoissonProblem(V,\allowbreak  f,\allowbreak  g,\allowbreak  kappa)} & constructor \\
 \code{problem.assemble()} & returns $(A,b)$ (boundary conditions included) \\
 \code{problem.solve(method)} & assemble and solve \\
-\code{problem.compute\_error(u, exact, norm)} & a single error norm \\
-\code{problem.compute\_errors(u, exact, grad)} & all error norms \\
-\code{HelmholtzProblem(V, f, g, k, kappa)} & constructor, $k$ and $\kappa$ are real constants \\
+\code{problem.compute\_\allowbreak error(u,\allowbreak  exact,\allowbreak  norm)} & a single error norm \\
+\code{problem.compute\_\allowbreak errors(u,\allowbreak  exact,\allowbreak  grad)} & all error norms \\
+\code{HelmholtzProblem(V,\allowbreak  f,\allowbreak  g,\allowbreak  k,\allowbreak  kappa)} & constructor, $k$ and $\kappa$ are real constants \\
 \code{helmholtz.k}, \code{helmholtz.kappa} & the stored coefficients ($A=\kappa K-k^2M$) \\
-\code{solve\_helmholtz(mesh, element, f, g, k)} & one-line Helmholtz solve (rejects \code{"RT0"}) \\
+\code{solve\_\allowbreak helmholtz(mesh,\allowbreak  element,\allowbreak  f,\allowbreak  g,\allowbreak  k)} & one-line Helmholtz solve (rejects \code{"RT0"}) \\
 \code{MixedPoissonProblem(...)} & returns $(Q,P)$ \\
-\code{mixed.error\_norms(P, Q, p\_exact, q\_exact)} & pressure / flux errors \\
-\code{mixed.check\_conservation()} & cell-wise mass conservation error \\
-\code{mixed.flux\_at\_points(points)} & flux reconstruction at given points (cell location is automatic) \\
-\code{mixed.cell\_flux(cell)} & flux vector at the cell centroid (for arrow plots) \\
+\code{mixed.error\_\allowbreak norms(P,\allowbreak  Q,\allowbreak  p\_\allowbreak exact,\allowbreak  q\_\allowbreak exact)} & pressure / flux errors \\
+\code{mixed.check\_\allowbreak conservation()} & cell-wise mass conservation error \\
+\code{mixed.flux\_\allowbreak at\_\allowbreak points(points)} & flux reconstruction at given points (cell location is automatic) \\
+\code{mixed.cell\_\allowbreak flux(cell)} & flux vector at the cell centroid (for arrow plots) \\
 \code{mixed.solve(method)} & three ways to solve the saddle-point system: \code{direct} / \code{schur} / \code{minres} \\
 \bottomrule
 \end{longtable}
@@ -2679,23 +2911,23 @@ Method & Description \\
 Method & Description \\
 \midrule
 \endhead
-\code{Solver.direct(A,b)} & direct method \\
-\code{Solver.conjugate\_gradient(...)} & CG \\
-\code{Solver.gmres(A,b,tol)} & GMRES \\
-\code{Solver.bicgstab(A,b,tol)} & BiCGSTAB \\
-\code{Solver.minres(A,b,tol)} & MINRES \\
-\code{Solver.solve(A,b,method)} & unified entry point \\
-\code{Solver.apply\_dirichlet(...)} & impose Dirichlet data \\
-\code{Solver.recommend(n, symmetric)} & recommend a solver \\
-\code{convergence\_study(...)} & convergence study \\
-\code{estimate\_convergence\_rate(h, e)} & convergence order \\
-\code{plot\_solution(u, mesh, V, ...)} & plot the solution \\
-\code{plot\_mesh(mesh, ...)} & plot the mesh \\
-\code{plot\_error(u, mesh, space, exact)} & plot the error \\
-\code{plot\_convergence(h, errors)} & plot convergence curves \\
-\code{plot\_pressure\_2d(mesh, P)} & plot the RT0 pressure \\
-\code{plot\_flux\_2d(space=V, Q=Q)} & plot the flux (reconstructed from $q_h$ at cell centroids) \\
-\code{compare\_solutions(entries)} & side-by-side comparison \\
+\code{Solver.direct(A,\allowbreak b)} & direct method \\
+\code{Solver.conjugate\_\allowbreak gradient(...)} & CG \\
+\code{Solver.gmres(A,\allowbreak b,\allowbreak tol)} & GMRES \\
+\code{Solver.bicgstab(A,\allowbreak b,\allowbreak tol)} & BiCGSTAB \\
+\code{Solver.minres(A,\allowbreak b,\allowbreak tol)} & MINRES \\
+\code{Solver.solve(A,\allowbreak b,\allowbreak method)} & unified entry point \\
+\code{Solver.apply\_\allowbreak dirichlet(...)} & impose Dirichlet data \\
+\code{Solver.recommend(n,\allowbreak  symmetric)} & recommend a solver \\
+\code{convergence\_\allowbreak study(...)} & convergence study \\
+\code{estimate\_\allowbreak convergence\_\allowbreak rate(h,\allowbreak  e)} & convergence order \\
+\code{plot\_\allowbreak solution(u,\allowbreak  mesh,\allowbreak  V,\allowbreak  ...)} & plot the solution \\
+\code{plot\_\allowbreak mesh(mesh,\allowbreak  ...)} & plot the mesh \\
+\code{plot\_\allowbreak error(u,\allowbreak  mesh,\allowbreak  space,\allowbreak  exact)} & plot the error \\
+\code{plot\_\allowbreak convergence(h,\allowbreak  errors)} & plot convergence curves \\
+\code{plot\_\allowbreak pressure\_\allowbreak 2d(mesh,\allowbreak  P)} & plot the RT0 pressure \\
+\code{plot\_\allowbreak flux\_\allowbreak 2d(space=V,\allowbreak  Q=Q)} & plot the flux (reconstructed from $q_h$ at cell centroids) \\
+\code{compare\_\allowbreak solutions(entries)} & side-by-side comparison \\
 \bottomrule
 \end{longtable}
 \endgroup

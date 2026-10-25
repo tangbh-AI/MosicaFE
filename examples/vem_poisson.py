@@ -1,0 +1,74 @@
+"""二维 VEM 主程序：问题数据 → 选网格 → 选元并求解 → 可视化。
+
+运行：python examples/vem_poisson.py
+main() 的 n_points 控制网格数量，degree 控制 VEM 阶数。
+"""
+
+# 模块职责：二维独立主程序，保持问题数据、选网格、求解、绘图的阅读顺序，输出目录为 output/vem_2d。
+
+
+import os
+import sys
+import json
+import time
+
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from MosicaFE import Mesh, plot_mesh, plot_solution, solve_poisson  # noqa: E402
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output", "vem_2d")
+os.makedirs(OUT, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# 问题数据：-Δu = f in (0,1)^2, u = 0 on ∂Ω, 精确解 u = sin(πx)sin(πy)
+# ---------------------------------------------------------------------------
+def exact(x):
+    # 提供已知精确解，用于制造源项并评估数值误差；求解过程中无需把精确解作为未知量输入。
+    return np.sin(np.pi * x[0]) * np.sin(np.pi * x[1])
+
+
+def source(x):
+    # 给出制造解对应的源项 f=-Δu，供单元载荷积分调用。
+    return 2.0 * np.pi ** 2 * exact(x)
+
+
+def exact_grad(x):
+    # 返回精确解各坐标方向的偏导数，供 H1 半范数误差评估使用。
+    return np.pi * np.array([np.cos(np.pi*x[0])*np.sin(np.pi*x[1]),
+                             np.sin(np.pi*x[0])*np.cos(np.pi*x[1])])
+
+
+def main(n_points=1024, degree=2):
+    # 执行二维完整流程：生成多边形网格，选择阶数并直接求解，评估误差，分别保存网格、解图和结果 JSON。
+    started = time.perf_counter()
+    # ---- 选网格 ---------------------------------------------------------
+    mesh = Mesh.voronoi_polygon(n_points=n_points, seed=42)
+
+    # ---- 选元 + 选求解器 + 求解 -----------------------------------------
+    k = degree  # VEM 阶数，由 main() 的 degree 参数选择。
+    out = solve_poisson(mesh, element="VEM", degree=k, f=source, g=lambda x: 0.0,
+                        solver="direct", return_all=True)
+    u, V = out["u"], out["space"]
+    errors = out["problem"].compute_errors(u, exact, exact_grad)
+    elapsed = time.perf_counter() - started  # 建网格、求解和误差计算，不含绘图。
+
+    # ---- 选可视化 -------------------------------------------------------
+    plot_mesh(mesh, filename=os.path.join(OUT, f"mesh_n{n_points}.png"))
+    plot_solution(u, mesh, V, title=f"VEM{k} solution (2D, {n_points} cells)",
+                  filename=os.path.join(OUT, f"solution_k{k}_n{n_points}.png"))
+    # 高阶 VEM 的 u 包含积分矩；解的范围应读取节点值，不能直接取 u.min/max。
+    values = V.nodal_values(u)
+    print("自由度个数：", u.size, "；节点解的范围：", float(values.min()), float(values.max()))
+    print(f"L2 误差：{errors['L2']:.6e}；H1 误差：{errors['H1']:.6e}；计算耗时：{elapsed:.2f} 秒", flush=True)
+    result = dict(dim=2, k=k, cells=mesh.n_cells, seed=42, nodes=mesh.n_nodes, dofs=u.size,
+                  h=mesh.get_mesh_size(), seconds=elapsed, **errors)
+    with open(os.path.join(OUT, f"result_k{k}_n{n_points}.json"), "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    return result
+
+
+if __name__ == "__main__":
+    main()

@@ -15,6 +15,11 @@
 纯 numpy 实现（CG / GMRES / BiCGSTAB）或稠密直接法。
 """
 
+# 模块职责：线性系统与边界约束的处理
+# 提供直接法和多种迭代法；有 SciPy 时使用其求解接口，否则部分算法由 NumPy 实现。
+# 先用边界值修正系统，再根据对称性、正定性和规模选择方法；迭代残差用于判断是否达到精度。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -43,6 +48,8 @@ class Solver:
     # ------------------------------------------------------------------
     # 边界条件
     # ------------------------------------------------------------------
+    # 工作块：把已知边界值并入方程组
+    # 先从右端扣除已知边界自由度对内部方程的贡献，再消去相应行列并在对角填 1；对应右端设为边界值，保持约束和内部方程一致。
     @staticmethod
     def apply_dirichlet(A, b, dofs, values=None):
         """强加 Dirichlet 边界条件 ``u[dofs] = values``（缺省取 0）。
@@ -196,6 +203,8 @@ class Solver:
 # ---------------------------------------------------------------------------
 # 纯 numpy 回退实现（只在没有 scipy 时使用）
 # ---------------------------------------------------------------------------
+# 工作块：共轭梯度迭代
+# 从初始解计算残差，沿共轭搜索方向更新解和残差；每轮依据残差检查精度，并利用新的残差构造下一轮方向，适用于对称正定系统。
 def _cg_dense(A, b, tol, maxiter, x0=None):
     x = np.zeros_like(b) if x0 is None else np.array(x0, dtype=float)
     r = b - A @ x
@@ -220,6 +229,8 @@ def _cg_dense(A, b, tol, maxiter, x0=None):
     return x
 
 
+# 工作块：重启 GMRES 迭代
+# 用 Arnoldi 过程建立 Krylov 子空间，在小规模最小二乘问题中寻找残差较小的修正；达到重启长度后以当前解为起点继续。
 def _gmres_dense(A, b, tol, restart, maxiter):
     n = b.size
     x = np.zeros(n)
@@ -258,6 +269,8 @@ def _gmres_dense(A, b, tol, restart, maxiter):
     raise ConvergenceError("GMRES（纯 numpy）未收敛")
 
 
+# 工作块：BiCGSTAB 迭代
+# 通过双共轭方向更新和额外的残差稳定化推进近似解；同时检查分母退化和停止条件，用于处理非对称系统。
 def _bicgstab_dense(A, b, tol, maxiter):
     x = np.zeros_like(b)
     r = b - A @ x

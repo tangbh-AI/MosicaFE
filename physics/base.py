@@ -22,6 +22,11 @@
 所以一个新的二阶椭圆问题通常只需要十几行。
 """
 
+# 模块职责：物理问题的共同求解流程
+# 保存空间、源项和边界值，约定子类用 assemble 返回离散系统 A、b。
+# solve 先组装再调用线性求解器，并缓存结果；误差计算委托给后处理层。
+
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -40,6 +45,7 @@ class BasePhysics(ABC):
     is_mixed = False
 
     def __init__(self, space, f=None, g=None, **kwargs):
+        # 保存空间、网格、源项与边界数据，建立解和线性系统的缓存，并取得边界自由度。
         self.space = space
         self.mesh = space.mesh
         self.n_dofs = space.n_dofs
@@ -60,12 +66,18 @@ class BasePhysics(ABC):
         """强加 Dirichlet 条件 ``u = g``（默认齐次）。"""
         dofs = self.boundary_dofs
         if values is None:
-            values = self.space._evaluate_function(
-                self.g, self.space.dof_coords[dofs]
-            ) if len(dofs) else np.zeros(0)
+            # 高阶 VEM 的面自由度是积分矩，不能当作重心处点值。
+            if hasattr(self.space, "boundary_values"):
+                values = self.space.boundary_values(self.g, dofs)
+            else:
+                values = self.space._evaluate_function(
+                    self.g, self.space.dof_coords[dofs]
+                ) if len(dofs) else np.zeros(0)
         return Solver.apply_dirichlet(A, b, dofs, values)
 
     # ------------------------------------------------------------------
+    # 工作块：执行公共的组装与求解流程
+    # 调用子类 assemble 得到已处理边界的 A、b，保存系统并交给 Solver；将计算出的自由度向量缓存在 solution 中并返回。
     def solve(self, method: str = "auto", **kwargs):
         """组装并求解，返回自由度向量。"""
         A, b = self.assemble()
@@ -94,6 +106,7 @@ class BasePhysics(ABC):
         return lambda x: -float(laplacian(x))
 
     def __repr__(self):  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return (
             f"<{type(self).__name__} space={self.space.name} "
             f"n_dofs={self.n_dofs} dim={self.mesh.dim}>"

@@ -12,6 +12,11 @@
 两者跑的是同一套测试。
 """
 
+# 模块职责：不依赖 pytest 的测试入口
+# 加载各个测试模块，展开参数化用例并逐个执行，汇总成功数量和异常详情。
+# 未安装 pytest 时使用 minipytest 提供需要的断言接口；最终退出码表示是否存在失败。
+
+
 from __future__ import annotations
 
 import importlib
@@ -37,6 +42,7 @@ except ImportError:
 
 
 def _iter_cases(func):
+    # 展开测试函数记录的参数组，为每组生成标签和关键字参数；未参数化时只执行一次。
     spec = getattr(func, "_parametrize", None)
     if spec is None:
         yield None, {}
@@ -48,6 +54,7 @@ def _iter_cases(func):
 
 
 def main():
+    # 收集所有 test_*.py 模块，展开参数组逐例执行；失败时保留异常堆栈，最后用退出码报告是否全部通过。
     modules = [
         name[:-3]
         for name in sorted(os.listdir(_HERE))

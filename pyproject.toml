@@ -1,7 +1,10 @@
+# 构建配置：声明构建工具及其依赖，pip 制作或安装包时使用。
 [build-system]
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
+# 项目元数据：包名、版本、简介、Python 版本和许可证用于描述发行包。
+# keywords 与 classifiers 供包索引检索分类；dependencies 是运行时必须安装的依赖。
 [project]
 name = "mosicafe"
 version = "1.0.0"
@@ -27,15 +30,19 @@ classifiers = [
 ]
 dependencies = ["numpy>=1.22"]
 
+# 可选功能依赖：sparse 用于稀疏计算，plot 用于绘图，test 用于测试。
+# 例如 pip install ".[plot]" 安装绘图依赖；all 同时安装这三组功能所需的库。
 [project.optional-dependencies]
 sparse = ["scipy>=1.8"]
 plot = ["matplotlib>=3.5"]
 test = ["pytest>=7"]
 all = ["scipy>=1.8", "matplotlib>=3.5", "pytest>=7"]
 
+# 包发现规则：include 控制哪些名称的包被纳入发行内容，星号表示通配。
 [tool.setuptools.packages.find]
 include = ["MosicaFE*"]
 
+# 测试默认选项：从 tests 目录收集用例，并按 filterwarnings 过滤指定警告。
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]

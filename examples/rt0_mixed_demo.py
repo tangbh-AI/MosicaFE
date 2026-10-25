@@ -15,6 +15,11 @@
     & "D:\\anaconda\\envs\\fealpy\\python.exe" MosicaFE\\examples\\rt0_mixed_demo.py
 """
 
+# 模块职责：RT0 混合元的完整使用示例
+# 分别演示二维、三维计算与网格加密实验，检查压力、通量误差和局部质量守恒。
+# 精确通量由精确解的负梯度给出；图像分别展示分片常数压力和重构的向量通量。
+
+
 import os
 import sys
 
@@ -38,10 +43,12 @@ os.makedirs(OUT, exist_ok=True)
 # 制造解：p = sin(πx)sin(πy)（单位正方形，齐次 Dirichlet）
 # ---------------------------------------------------------------------------
 def exact(x):
+    # 提供已知精确解，用于制造源项并评估数值误差；求解过程中无需把精确解作为未知量输入。
     return np.sin(np.pi * x[0]) * np.sin(np.pi * x[1])
 
 
 def source(x):
+    # 给出制造解对应的源项 f=-Δu，供单元载荷积分调用。
     return 2.0 * np.pi ** 2 * exact(x)
 
 
@@ -56,10 +63,12 @@ def exact_flux(x):
 
 
 def exact_3d(x):
+    # 定义三维正弦制造解，作为三维误差和收敛性检查的基准。
     return np.sin(np.pi * x[0]) * np.sin(np.pi * x[1]) * np.sin(np.pi * x[2])
 
 
 def source_3d(x):
+    # 给出三维正弦解对应的源项 3π²u。
     return 3.0 * np.pi ** 2 * exact_3d(x)
 
 
@@ -76,6 +85,7 @@ def exact_flux_3d(x):
 
 
 def demo_2d(n: int = 24):
+    # 执行二维混合 Poisson 算例，检查通量、压力误差并输出可视化结果。
     print("=" * 72)
     print("① 二维三角形网格：空间、自由度和两个块")
     print("=" * 72)
@@ -118,6 +128,7 @@ def demo_2d(n: int = 24):
 
 
 def demo_convergence(levels=(4, 8, 16, 32)):
+    # 在一组逐渐加密的网格上重复计算，观察离散误差下降的速度。
     print()
     print("=" * 72)
     print("② 收敛阶：压力与通量都是一阶（RT0×P0 的理论阶）")
@@ -141,6 +152,7 @@ def demo_convergence(levels=(4, 8, 16, 32)):
 
 
 def demo_3d(levels=(2, 4, 8)):
+    # 执行三维混合 Poisson 算例，核对压力、通量以及单元质量守恒。
     print()
     print("=" * 72)
     print("③ 三维四面体网格：同一段代码，只换网格")
@@ -162,6 +174,7 @@ def demo_3d(levels=(2, 4, 8)):
 
 
 def main():
+    # 依次执行二维混合求解、收敛实验与三维算例，集中展示 RT0 通量和压力的使用。
     demo_2d()
     demo_convergence()
     demo_3d()

@@ -15,6 +15,11 @@
     单元内部自由度，只属于本单元。
 """
 
+# 模块职责：参考单元上的基函数
+# 单纯形使用重心坐标，四边形和六面体使用一维基函数的张量积，输出基函数值与参考梯度。
+# 这里不处理实际网格的尺度与旋转；这些几何影响由空间层中的坐标映射和梯度变换处理。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -86,6 +91,8 @@ def _simplex_lambdas(element_type: str, xi: np.ndarray):
     return lam, grad
 
 
+# 工作块：用重心坐标构造单纯形基函数
+# 先计算参考点的重心坐标，再根据多项式次数组成一次或二次形函数，同时返回它们对参考坐标的梯度。
 def simplex_basis(element_type: str, degree: int, xi):
     """单纯形 Lagrange 基函数在参考点 xi 处的值与梯度。
 
@@ -148,6 +155,8 @@ def _lagrange_1d(p: int, t: float):
     return values, grads
 
 
+# 工作块：通过一维基函数构造张量积基函数
+# 分别在各坐标方向计算一维函数值及导数，再按多重指标相乘；求某方向导数时，只替换该方向的一维因子。
 def tensor_basis(dim: int, degree: int, xi):
     """张量积 Lagrange 基函数在参考点 xi 处的值与梯度。
 

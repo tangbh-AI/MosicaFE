@@ -5,6 +5,11 @@
 以便用户按书中的写法扩展新 PDE。
 """
 
+# 模块职责：几何测量与坐标变换
+# 计算面积、体积、重心、直径、法向，以及参考坐标和实际坐标之间的映射。
+# 雅可比描述坐标变化；积分使用行列式的绝对值缩放，梯度使用逆映射转换，二者不能混用。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -168,6 +173,8 @@ def cell_diameter(verts: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 # 雅可比与梯度
 # ---------------------------------------------------------------------------
+# 工作块：计算单纯形的仿射变换
+# 以一个顶点为原点、其他顶点差为边向量建立坐标变换；单纯形映射是仿射的，因此雅可比在整个单元内保持不变。
 def simplex_jacobian(vertices: np.ndarray):
     """单纯形（线段/三角形/四面体）的仿射映射雅可比。
 
@@ -184,6 +191,8 @@ def simplex_jacobian(vertices: np.ndarray):
     return J, float(np.linalg.det(J))
 
 
+# 工作块：计算张量积单元的局部雅可比
+# 用参考形函数的导数对实际节点坐标加权；畸变四边形或六面体的雅可比随参考点变化，需要在求积点分别计算。
 def tensor_jacobian(vertices: np.ndarray, xi: np.ndarray):
     """四边形 / 六面体（双线性 / 三线性映射）在参考点 xi 处的雅可比。
 
@@ -258,6 +267,7 @@ def apply_affine_map(ref_points: np.ndarray, vertices: np.ndarray) -> np.ndarray
 
 
 def _shape_functions_tensor(xi, d):
+    # 在参考四边形或六面体上计算几何映射用的形函数及其参考导数。
     xi = np.asarray(xi, dtype=float).ravel()
     if d == 2:
         s, t = xi
@@ -280,6 +290,7 @@ def _shape_functions_tensor(xi, d):
 
 
 def _tensor_map(ref_points, vertices):
+    # 以形函数对实际顶点坐标加权，把参考点映射到实际四边形或六面体。
     vertices = np.asarray(vertices, dtype=float)
     d = vertices.shape[1]
     out = np.zeros((len(ref_points), d))
@@ -288,6 +299,8 @@ def _tensor_map(ref_points, vertices):
     return out
 
 
+# 工作块：将参考梯度转换为物理梯度
+# 通过链式法则使用雅可比的逆变换；这里的转置约定必须与基函数梯度的数组布局一致，否则旋转网格上的结果会出错。
 def transform_gradient(ref_grad: np.ndarray, J: np.ndarray) -> np.ndarray:
     """把参考单元上的梯度变换到物理单元：``grad_x = J^{-T} grad_xi``。"""
     ref_grad = np.asarray(ref_grad, dtype=float)

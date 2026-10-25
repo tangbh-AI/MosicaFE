@@ -22,7 +22,7 @@
 ===============  =========================================
 ``"P1" / "P2"``  经典 Lagrange 有限元（三角/四面体）
 ``"Q1" / "Q2"``  张量积 Lagrange（四边形/六面体）
-``"VEM" / "VEM1"``虚拟元（任意多边形 / 多面体）
+``"VEM" / "VEMk"``k 阶虚拟元（k 为正整数，VEM 默认 1）
 ``"RT0"``        RT0×P0 混合元（返回 ``(Q, P)``）
 ===============  =========================================
 
@@ -30,6 +30,11 @@
 RT0 的鞍点系统是对称**不定**的，只接受 ``"auto" / "direct" / "schur" / "minres"
 / "gmres" / "bicgstab"``。
 """
+
+# 模块职责：统一的用户入口
+# 将 P1、Q2、VEM、RT0 等名称解析为具体空间，再将网格、源项和边界条件交给对应问题类。
+# 阅读顺序：resolve_element 解释名称 → make_space 创建空间 → solve_* 或 run 创建问题并求解。
+
 
 from __future__ import annotations
 
@@ -71,13 +76,15 @@ ELEMENT_ALIASES = {
 }
 
 
+# 工作块：统一空间名称与别名
+# 解析元素名称中的空间族和次数，使不同拼写最终对应同一组内部参数；不能识别的名称在这里报错。
 def resolve_element(element, degree: int = None):
     """把 ``element`` 字符串解析成 ``(family, degree)``。"""
     key = str(element).strip().upper().replace(" ", "")
     if key in ELEMENT_ALIASES:
         family, default_degree = ELEMENT_ALIASES[key]
-    elif key.startswith("VEM"):
-        family, default_degree = "vem", 1
+    elif key.startswith("VEM") and key[3:].isdigit():
+        family, default_degree = "vem", int(key[3:])
     elif key.startswith("RT0") or key.startswith("MIXED"):
         family, default_degree = "rt0", 1
     elif key[:1] in ("P", "Q") and key[1:].isdigit():
@@ -86,7 +93,12 @@ def resolve_element(element, degree: int = None):
         raise ValueError(
             f"未知元 {element!r}；可用：{sorted(ELEMENT_ALIASES)}"
         )
-    return family, int(degree if degree is not None else (default_degree or 1))
+    selected_degree = degree if degree is not None else (default_degree or 1)
+    if family == "vem":
+        from numbers import Integral
+        if isinstance(selected_degree, bool) or not isinstance(selected_degree, Integral) or selected_degree < 1:
+            raise ValueError("VEM 的 degree 必须是正整数 k≥1")
+    return family, int(selected_degree)
 
 
 def make_space(mesh, element: str = "P1", degree: int = None, **kwargs):
@@ -96,6 +108,7 @@ def make_space(mesh, element: str = "P1", degree: int = None, **kwargs):
 
 
 def _coerce_mesh(mesh):
+    # 统一网格输入：已有 Mesh 直接使用，字典参数则交给 Mesh 构造；不支持的类型明确报错。
     if isinstance(mesh, Mesh):
         return mesh
     if isinstance(mesh, dict):
@@ -223,6 +236,8 @@ def solve_helmholtz(
     return u
 
 
+# 工作块：按名称完成一次 PDE 求解
+# 先规范网格并选择空间，再从注册表创建问题，最后交给问题对象求解；调用方可通过统一入口切换方程。
 def run(
     problem: str = "poisson",
     mesh=None,

@@ -121,7 +121,7 @@ u = HelmholtzProblem(V, f=source, g=lambda x: 0.0, k=1.0).solve()  # 分步写�
 | `"P2"` | 二次 Lagrange | 三角形 / 四面体 | 3 / 2 |
 | `"Q1"` | 双线性 Lagrange | 四边形 / 六面体 | 2 / 1 |
 | `"Q2"` | 双二次 Lagrange | 四边形 / 六面体 | 3 / 2 |
-| `"VEM"` | 一次虚拟元 | **任意**多边形 / 多面体 | 2 / 1 |
+| `"VEMk"` 或 `"VEM", degree=k` | k 阶协调增强型虚拟元 | 星形多边形 / 多面体，详见下文几何条件 | k+1 / k（光滑解，投影误差） |
 | `"RT0"` | RT0×P0 混合元 | 三角形 / 四面体 | 1 / 1（压力 / 通量） |
 
 网格由 `MosicaFE.Mesh` 生成：
@@ -138,6 +138,105 @@ u = HelmholtzProblem(V, f=source, g=lambda x: 0.0, k=1.0).solve()  # 分步写�
 | `Mesh.from_arrays(nodes, elements)` | 自定义 | 自动推断 |
 
 ---
+
+## k 阶 VEM：同一算例求解二维、三维 Poisson
+
+原来的框架和正弦算例不变，空间改成 `FESpace.vem(mesh, degree=k)` 即可。
+`degree` 接受任意正整数，没有写死的一阶、二阶分支；也支持 `element="VEM3"`。
+
+```python
+# mesh 可以是二维多边形网格，也可以是三维星形多面体网格。
+V = FESpace.vem(mesh, degree=3)
+problem = PoissonProblem(V, f=source, g=lambda x: 0.0)
+u = problem.solve(method="direct")
+```
+
+VEM 主程序与 FEM 的 `poisson_demo.py` 保持同样结构：问题数据 → 选网格 → 选元并求解 → 可视化。
+二维、三维各一份，直接运行，不需要命令行参数：
+
+```powershell
+python examples/vem_poisson.py
+python examples/vem_poisson_3d.py
+```
+
+各自主程序保持“选网格 → 选元并求解 → 可视化”的结构。
+修改 `main(n_points=..., degree=...)` 的默认值即可选择网格数量和阶数，核心调用与 FEM 相同：
+
+```python
+out = solve_poisson(mesh, element="VEM", degree=k, f=source, g=lambda x: 0.0,
+                    solver="direct", return_all=True)
+u, V = out["u"], out["space"]
+plot_solution(u, mesh, V)
+```
+
+原有批量加密实验保存在 `examples/vem_convergence.py`：
+
+```powershell
+python examples/vem_convergence.py --degree 1 2 3 4 --levels 2 4 --plot
+```
+
+算例仍然是单位区域上的 `-Δu=f, u=0`：二维
+`u=sin(πx)sin(πy), f=2π²u`；三维再乘 `sin(πz)`，`f=3π²u`。
+当前两个主程序默认使用 1024 单元二维 Voronoi 多边形网格、192 单元三维 Voronoi 多面体网格，均为二阶。
+每个单元可以有不同的顶点数和面数，每个面也可以有不同的边数。
+二维输出单独保存在 `examples/output/vem_2d/`，三维在 `examples/output/vem_3d/`。
+其中 `mesh_n数量.png` 是网格图，`solution_k阶数_n数量.png` 是解图，
+`result_k阶数_n数量.json` 保存网格尺寸、自由度、L2/H1/Linf 投影误差及计算耗时（不含绘图）。
+本次细网格复算的分维度结果汇总为各目录中的 `summary.json`。
+批量实验结果写入 `examples/output/vem_poisson_results.json`，`--plot` 额外保存二维图和三维中截面图。
+二维解图使用节点值，
+三维解图在真实 `z=0.5` 截面上评估 VEM 投影值；误差在高阶求积点上计算。
+
+网格生成只需一行，求解调用不变：
+
+```python
+mesh = Mesh.voronoi_polygon(n_points=1024, seed=42)      # 二维
+mesh = Mesh.voronoi_polyhedron(n_points=192, seed=42)    # 三维
+```
+
+两种 Voronoi 生成器需要 SciPy。`seed` 固定随机网格，`n_points` 控制单元数量；
+增加单元数会生成另一张网格，不是对原网格做嵌套加密。
+
+自定义三维网格可以为每个单元单独提供面：
+
+```python
+mesh = Mesh.from_arrays(nodes, elements, element_type="polyhedron", faces=faces)
+# faces[c][f] = 第 c 个单元第 f 个面的局部顶点编号，沿该面的边界排列。
+# elements[c][i] 才是第 c 个单元局部顶点 i 对应的全局节点编号。
+```
+
+旧的 `faces[面][局部顶点]` 公共模板仍可用。显式提供的面优先于顶点数推断，
+因此八顶点的七棱锥不会被误当成六面体。共享面和边的自由度自动合并。
+测试覆盖六面体与三棱柱混合网格、含多边形面的棱锥、星形凹棱柱和三维 Voronoi。
+
+实现分成两个文件，计算流程如下：
+
+1. `spaces/vem.py` 登记全局自由度并连接原有组装器。顶点取值，每条边增加
+   `k-1` 个点值；每个面和体增加总次数不超过 `k-2` 的归一化积分矩。
+   相邻单元共享边与面的全部自由度，只有体内部矩不共享。
+2. `spaces/vem_local.py` 用分部积分构造 k 次 H1 投影：边界项由边/面的投影计算，
+   Laplace 项由内部矩计算；再使用增强约束计算 k 次 L2 投影。
+   三维面本身是二维 VEM，不将面内虚拟函数直接当成已知多项式。
+3. 刚度是“投影梯度积分＋投影核上的稳定化”，载荷通过 L2 投影积分。
+   几何三角化/四面体化只用于求积，没有额外引入 FEM 自由度。
+4. 非零 Dirichlet 数据按自由度定义施加：点取函数值，面矩取边界函数积分。
+   `PoissonProblem` 与原来的线性求解器继续负责系统求解。
+
+这是增强型 VEM 的可计算投影构造，方法参考
+[Ahmad 等，Equivalent projectors for virtual element methods (2013)](https://boa.unimib.it/handle/10281/49406)。
+
+实测网格每方向从 2 份加密到 4 份，投影误差的收敛阶如下；光滑解的目标为 L2 的 `k+1` 阶和 H1 的 `k` 阶。
+
+| k | 二维 L2 / H1 阶 | 三维 L2 / H1 阶 |
+| --- | --- | --- |
+| 1 | 1.75 / 1.02 | 2.06 / 0.91 |
+| 2 | 3.06 / 1.91 | 3.04 / 1.87 |
+| 3 | 4.20 / 3.08 | 4.15 / 2.95 |
+| 4 | 4.82 / 3.94 | 5.12 / 3.93 |
+
+一阶的二维粗网格尚未完全进入渐近区间。测试另外覆盖到五阶的多项式再生、
+矩阵一致性、非零边界矩和含五边形面的三维多面体。
+测试入口仍为 `python tests/run_tests.py`，无需额外安装 pytest。
 
 ## 完整的调用方式
 
@@ -422,7 +521,13 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 ## 已知限制
 
 * Lagrange 只实现到 2 次（P2 / Q2）；更高次的接入点在 `spaces/reference.py`。
-* VEM 只实现 k=1（每顶点一个自由度），且 3D 通用多面体需要显式给出面。
+* VEM 支持任意整数 k≥1；二维多边形的顶点均值须严格位于星形核内，顶点须沿边界排序。
+  三维支持顶点均值在星形核内的多面体，包括满足条件的凹多面体；每个面还须是共面的星形多边形，
+  其顶点均值位于自身星形核内。表面必须闭合、连通，可自动统一各面的输入方向。
+  通用三维单元通过 `faces[单元][面][局部顶点]` 分别描述，不支持曲边、非平面面或带孔单元。
+  网格须协调：共享面使用同一组全局节点及边界环；不自动修补重叠单元、悬挂节点或几何裂缝。
+  缩放单项式在很高阶或畸变网格上仍可能病态；目前多项式一致性测试覆盖到 k=5，
+  二维/三维正弦解加密实验覆盖 k=1…4，不表示所有更高阶都具有同样的数值稳定性。
 * RT0 只支持齐次 Dirichlet（在混合格式里是自然边界条件）；
   网格必须是 `H(div)` 协调的单纯形剖分（三角形 / 四面体），
   不协调的剖分会被 `core/facets.py` 直接拦下而不是静默算错。
@@ -433,8 +538,10 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 * `VEMSpace(stabilization="none")` 仅供诊断，纯投影项是奇异的，不要用于求解。
 * `Mesh.pentagon` 的单元含 180° 内角（退化多边形），实测收敛阶正常，
   但严格来说在 VEM 的星形正则性假设之外。
-* 误差范数中，VEM 的解函数用"顶点自由度上的线性最小二乘重构"代替
-  （虚拟元没有显式基函数），收敛阶与 `u_h` 一致。
+* VEM 的 L2 误差使用 k 次 L2 投影，H1 半范数误差使用 k 次 H1 投影的梯度；
+  这是可计算投影的误差，不是不可见虚拟函数本身的精确误差。
+  Linf 是求积点及网格顶点上的采样最大误差，不是连续区域上的严格上确界。
+  `stabilization="legacy"` 兼容旧参数名，目前与 `"trace"` 使用同一对称稳定化。
 
 ---
 

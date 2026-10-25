@@ -9,6 +9,11 @@ VEM 稳定化项的设计选择。
     & "D:\\anaconda\\envs\\fealpy\\python.exe" MosicaFE\\tests\\diagnostics.py
 """
 
+# 模块职责：定位数值实现中的问题
+# 分别研究稳定化、几何映射、重构和混合元行为，通过对照实验判断误差来自哪个环节。
+# 这些实验用于分析数值性质；与只给出成功或失败的单元测试相比，它们会输出更多中间指标。
+
+
 from __future__ import annotations
 
 import os
@@ -34,12 +39,14 @@ from MosicaFE.tests.run_checks import (  # noqa: E402
 
 
 def report(title):
+    # 打印诊断实验的小节标识，使后续误差和矩阵性质输出能够按实验分组阅读。
     print("\n" + "=" * 72)
     print(title)
     print("=" * 72)
 
 
 def vem_convergence(mesh_factory, stabilization, levels=(4, 8, 16, 32)):
+    # 固定网格族与稳定化方式，重复求解不同密度的 VEM 问题并比较误差下降情况。
     hs, l2, h1 = [], [], []
     for n in levels:
         mesh = mesh_factory(n)
@@ -58,6 +65,7 @@ def vem_convergence(mesh_factory, stabilization, levels=(4, 8, 16, 32)):
 
 
 def study_stabilization():
+    # 对比不同稳定化设置在同一制造解问题上的误差，判断投影核控制是否有效。
     report("VEM 稳定化方案对比（2D，制造解 u=sin(pi x)sin(pi y)）")
     factories = {
         "triangle": lambda n: mf.Mesh.rectangle(nx=n, ny=n),
@@ -75,6 +83,7 @@ def study_stabilization():
 
 
 def study_voronoi():
+    # 在非结构多边形网格上检查收敛表现，避免只在规则网格上验证方法。
     report("VEM 在 Voronoi 多边形网格上的收敛（随机多边形、无退化角）")
     hs, l2, h1 = [], [], []
     for npts in (50, 100, 200, 400, 800, 1600, 3200):
@@ -96,6 +105,7 @@ def study_voronoi():
 
 
 def study_reconstruction():
+    # 单独检查由精确自由度重构函数时的误差，区分重构误差与方程求解误差。
     report("VEM 重构误差（用精确解的顶点值做线性最小二乘重构）")
     for name, factory in {
         "triangle": lambda n: mf.Mesh.rectangle(nx=n, ny=n),
@@ -119,6 +129,7 @@ def study_reconstruction():
 
 
 def study_polynomial_reproduction():
+    # 检查离散空间能否重现已知多项式，作为基函数、投影和坐标变换的一致性诊断。
     report("单元矩阵的基本性质：多项式再生、对称性、正定性")
     for name, mesh, element in (
         ("tri-P1", mf.Mesh.rectangle(nx=4, ny=4), "P1"),
@@ -146,6 +157,7 @@ def study_polynomial_reproduction():
 
 
 def main():
+    # 汇总调用各项数值诊断实验，观察稳定化、投影重构和几何处理的独立影响。
     study_stabilization()
     study_voronoi()
     study_reconstruction()
@@ -168,6 +180,7 @@ def study_tensor_geometry():
     report("四边形 / 六面体：雅可比约定与旋转不变性（第 7 号 bug 的回归）")
 
     def fd(v, xi, eps=1e-6):
+        # 用有限差分近似导数，为解析几何变换提供独立的数值对照。
         xi = np.asarray(xi, float)
         J = np.zeros((xi.size, xi.size))
         for k in range(xi.size):
@@ -191,6 +204,7 @@ def study_tensor_geometry():
         print(f"   |J - J_有限差分|  {tag:12s} = {np.abs(J - fd(v, xi)).max():.2e}")
 
     def rot_mesh(n, deg, et="quad"):
+        # 旋转网格节点但保留单元连接，检查算法对物理坐标方向变化的适应性。
         base = (mf.Mesh.rectangle(nx=n, ny=n, element_type=et) if et == "quad"
                 else mf.Mesh.box(nx=n, ny=n, nz=n, element_type=et))
         th = np.deg2rad(deg)
@@ -203,7 +217,9 @@ def study_tensor_geometry():
         return mesh, R
 
     def l2(mesh, R, dim, degree):
+        # 计算当前诊断中的 L2 指标，作为不同网格或实现方案的比较量。
         def exact(x):
+            # 提供已知精确解，用于制造源项并评估数值误差；求解过程中无需把精确解作为未知量输入。
             xi = R.T @ np.asarray(x, float)
             if dim == 2:
                 return np.sin(np.pi * xi[0]) * np.sin(np.pi * xi[1])

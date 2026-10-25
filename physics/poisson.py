@@ -21,6 +21,11 @@
    u_vem = PoissonProblem(FESpace.vem(mesh),       f=src, g=zero).solve()
 """
 
+# 模块职责：Poisson 方程的离散
+# 以空间提供的刚度矩阵表示扩散，以载荷向量表示源项，再施加给定的 Dirichlet 边界值。
+# 离散系统为 A @ u = b；求解得到自由度向量后，空间对象负责把它解释为函数值。
+
+
 from __future__ import annotations
 
 from .base import BasePhysics
@@ -41,6 +46,8 @@ class PoissonProblem(BasePhysics):
         self.kappa = kappa
 
     # ------------------------------------------------------------------
+    # 工作块：形成 Poisson 的离散方程
+    # 从空间取得刚度矩阵和源项载荷，按扩散系数构造系统；最后施加边界约束并返回 A、b，供线性求解器使用。
     def assemble(self):
         """组装 ``kappa * K`` 与载荷向量，并施加 Dirichlet 条件。"""
         A = self.space.stiffness_matrix()
@@ -64,6 +71,7 @@ class PoissonProblem(BasePhysics):
         return float(np.sqrt(max(u @ (A @ u), 0.0)))
 
     def _as_dof_vector(self, u):
+        # 将输入整理为一维浮点自由度向量，便于矩阵乘法及能量范数计算。
         import numpy as np
 
         u = np.asarray(u, dtype=float).ravel()
@@ -73,4 +81,5 @@ class PoissonProblem(BasePhysics):
 
     # ------------------------------------------------------------------
     def __repr__(self):  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return f"<PoissonProblem space={self.space.name} kappa={self.kappa}>"

@@ -1,0 +1,33 @@
+dim  k   n   dofs       L2        H1      rateL2  rateH1
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k1_n2.png
+  2  1   2      9  2.645e-01 1.481e+00  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k1_n4.png
+  2  1   4     25  7.850e-02 7.286e-01    1.75    1.02
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k2_n2.png
+  2  2   2     25  4.054e-02 5.208e-01  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k2_n4.png
+  2  2   4     81  4.872e-03 1.387e-01    3.06    1.91
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k3_n2.png
+  2  3   2     45  1.010e-02 1.539e-01  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k3_n4.png
+  2  3   4    153  5.489e-04 1.826e-02    4.20    3.08
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k4_n2.png
+  2  4   2     69  1.332e-03 2.715e-02  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_2d_k4_n4.png
+  2  4   4    241  4.703e-05 1.767e-03    4.82    3.94
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k1_n2.png
+  3  1   2     27  1.760e-01 1.375e+00  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k1_n4.png
+  3  1   4    125  4.223e-02 7.308e-01    2.06    0.91
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k2_n2.png
+  3  2   2    125  5.944e-02 6.708e-01  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k2_n4.png
+  3  2   4    729  7.202e-03 1.831e-01    3.04    1.87
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k3_n2.png
+  3  3   2    275  1.783e-02 2.623e-01  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k3_n4.png
+  3  3   4   1701  1.002e-03 3.398e-02    4.15    2.95
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k4_n2.png
+  3  4   2    485  4.252e-03 7.642e-02  --      --
+[MosicaFE] 图像已保存：D:\MosicaFE\examples\output\vem_3d_k4_n4.png
+  3  4   4   3105  1.221e-04 5.012e-03    5.12    3.93

@@ -15,6 +15,11 @@
    plot_mesh(mesh, filename="mesh.png")
 """
 
+# 模块职责：网格与数值结果绘图
+# 将不同空间的自由度数据转换为可画的节点值、单元压力或通量向量，再交给 Matplotlib。
+# 二维结果直接绘制，三维结果按切片显示；公共保存接口负责文件输出和是否显示窗口。
+
+
 from __future__ import annotations
 
 import os
@@ -36,6 +41,7 @@ __all__ = [
 
 
 def _require_pyplot():
+    # 按需加载绘图库；缺少可选绘图依赖时给出提示，让数值求解仍可继续使用。
     plt = matplotlib_or_none()
     if plt is None:
         print(
@@ -107,27 +113,88 @@ def _slice_3d(mesh, nodal_values, z_slice, tol=None):
     return mtri.Triangulation(xy[:, 0], xy[:, 1]), vals
 
 
+def _vem_slice(space, values, z_slice):
+    """在真实 z 平面切开几何积分四面体，并在切点求 VEM 投影值。
+
+    不再把 z 附近不同高度的节点压到同一平面；切片仅用于展示，不增加求解自由度。
+    """
+    from itertools import combinations
+    import matplotlib.tri as mtri
+
+    xy, triangles, field = [], [], []
+    # 截面恰好落在共享面上时，两侧单元可能给出同一切片；用几何顶点集合去重，避免面积和显示重复覆盖。
+    seen = set()
+    for c, cell in enumerate(space.cells):
+        points, local_triangles = [], []
+        for face in cell.children:
+            for edge in face.children:
+                tet = np.vstack([cell.center, face.center, edge.coords])
+                if z_slice < tet[:, 2].min()-1e-12 or z_slice > tet[:, 2].max()+1e-12:
+                    continue
+                cut = {}
+                # 检查积分四面体的六条边：端点在平面上则保留，跨越平面的边按线性比例计算精确交点。
+                for a, b in combinations(tet, 2):
+                    da, db = a[2]-z_slice, b[2]-z_slice
+                    for p, d in ((a, da), (b, db)):
+                        if abs(d) < 1e-12:
+                            cut[tuple(np.round(p, 12))] = p
+                    if da*db < 0:
+                        p = a + da/(da-db)*(b-a)
+                        cut[tuple(np.round(p, 12))] = p
+                if len(cut) < 3:
+                    continue
+                key = tuple(sorted(cut))
+                if key in seen:
+                    continue
+                seen.add(key)
+                polygon = np.array(list(cut.values()))
+                center = polygon.mean(axis=0)
+                angles = np.arctan2(polygon[:, 1]-center[1], polygon[:, 0]-center[0])
+                polygon = polygon[np.argsort(angles)]
+                if abs(np.cross(polygon[1]-polygon[0], polygon[2]-polygon[0])[2]) < 1e-15:
+                    continue
+                offset = len(points)
+                points.extend([center, *polygon])
+                for i in range(len(polygon)):
+                    local_triangles.append([offset, offset+1+i, offset+1+(i+1)%len(polygon)])
+        if points:
+            points = np.array(points)
+            offset = len(xy)
+            xy.extend(points[:, :2])
+            triangles.extend(np.asarray(local_triangles)+offset)
+            field.extend(space.evaluate(c, values, points))
+    if not triangles:
+        raise ValueError(f'z={z_slice} 未与网格内部相交')
+    xy = np.array(xy)
+    return mtri.Triangulation(xy[:, 0], xy[:, 1], np.array(triangles)), np.array(field)
+
+
 # ---------------------------------------------------------------------------
 def plot_mesh(mesh, title=None, filename=None, show=False, ax=None, dpi=200):
-    """画网格结构（2D 直接画线；3D 画 z 中截面）。"""
+    """画真实网格结构：二维单元边，三维多边形面。"""
     plt = _require_pyplot()
     if plt is None:
         return None
     own = ax is None
     if own:
-        _, ax = plt.subplots(figsize=(6, 5.4))
+        fig = plt.figure(figsize=(6, 5.4))
+        ax = fig.add_subplot(111, projection='3d' if mesh.dim == 3 else None)
 
     if mesh.dim == 3:
-        z_mid = 0.5 * (mesh.nodes[:, 2].min() + mesh.nodes[:, 2].max())
-        tol = 0.35 * mesh.get_mesh_size()
-        ids = np.where(np.abs(mesh.nodes[:, 2] - z_mid) < tol)[0]
-        if ids.size < 3:
-            raise ValueError("切面节点太少，无法绘图")
-        ax.triplot(
-            mesh.nodes[ids, 0], mesh.nodes[ids, 1],
-            color="k", linewidth=0.6,
-        )
-        ax.set_title(title or f"Mesh (z={z_mid:.3g} slice)")
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        if not hasattr(ax, 'add_collection3d'):
+            raise ValueError('三维网格的 ax 必须使用 projection="3d"')
+        faces = {}
+        for c, cell in enumerate(mesh.elements):
+            for face in mesh.get_cell_faces(c):
+                ids = tuple(int(cell[i]) for i in face)
+                faces.setdefault(tuple(sorted(ids)), mesh.nodes[list(ids)])
+        ax.add_collection3d(Poly3DCollection(list(faces.values()), alpha=.12,
+                                            facecolor='lightblue', edgecolor='black', linewidth=.5))
+        ax.auto_scale_xyz(mesh.nodes[:, 0], mesh.nodes[:, 1], mesh.nodes[:, 2])
+        ax.set_box_aspect(np.ptp(mesh.nodes, axis=0))
+        ax.set_zlabel('z')
+        ax.set_title(title or f'Polyhedral mesh: {mesh.n_cells} cells')
     else:
         for cell in mesh.elements:
             v = np.asarray(mesh.nodes[cell], dtype=float)
@@ -148,6 +215,7 @@ def plot_mesh(mesh, title=None, filename=None, show=False, ax=None, dpi=200):
 # ---------------------------------------------------------------------------
 def _plot_2d_field(ax, mesh, values, title, cmap="viridis", levels=50,
                    cell_values=None):
+    # 将多边形节点或单元数据转换为显示用三角片，再绘制标量场和颜色条。
     import matplotlib.tri as mtri
 
     xy, tris, vals = _triangulate_2d(mesh, values, cell_values=cell_values)
@@ -229,7 +297,8 @@ def plot_solution(
         else:
             _plot_2d_field(ax, mesh, nodal, title, levels=levels)
     else:
-        out = _slice_3d(mesh, nodal, z_slice)
+        out = (_vem_slice(space, u, z_slice) if getattr(space, 'family', None) == 'vem'
+               else _slice_3d(mesh, nodal, z_slice))
         if out is None:
             raise ValueError(f"z={z_slice} 附近节点太少，无法绘制切片")
         triang, vals = out
@@ -358,6 +427,7 @@ def plot_flux_2d(mesh=None, Q=None, space=None, cell_flux_fn=None, title="Flux (
         Q = np.asarray(Q, dtype=float)
 
         def cell_flux_fn(c):
+            # 为绘图的指定单元提供通量求值入口，连接空间重构与向量场显示逻辑。
             ctr = mesh.get_cell_centroid(c)[None, :]
             return space.evaluate_flux(c, Q[c], ctr)[0]
 

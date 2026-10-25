@@ -8,6 +8,11 @@
    problem = create_problem("poisson", V, f=source, g=zero)
 """
 
+# 模块职责：方程名称到实现类的注册表
+# 装饰器将短名称与问题类关联，调用方可以按名称创建问题，而无需知道类的导入位置。
+# 注册、查找和创建分开处理；未知名称和重复注册的限制在这里统一检查。
+
+
 from __future__ import annotations
 
 __all__ = [
@@ -25,6 +30,7 @@ def register_problem(name: str, cls=None, *, override: bool = False):
     """注册一个 PDE 实现。既可当装饰器，也可直接调用。"""
 
     def _register(target):
+        # 把装饰器接收的问题类放入注册表，并返回原类，使类定义和按名称创建接口同时可用。
         key = str(name).lower()
         if key in _REGISTRY and not override:
             raise ValueError(

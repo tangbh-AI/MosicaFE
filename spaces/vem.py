@@ -1,439 +1,190 @@
-"""虚拟元空间 (Virtual Element Method, k=1)。
+"""二维/三维任意整数 k≥1 的协调增强型虚拟元。
 
-虚拟元与有限元最大的不同：**基函数没有显式表达式**，只有
-
-1. 每个顶点一个自由度；
-2. 单元上可计算的量是"投影到一次多项式"的算子
-   :math:`\\Pi^{\\nabla}`；
-3. 因此单元双线性型拆成**一致性项 + 稳定化项**
-
-.. math::
-
-   K_e = \\underbrace{\\big(G\\Pi\\big)^{\\!T}\\!\\big(G\\Pi\\big)|K|}_{A_{\\rm proj}}
-       + \\underbrace{\\sigma\\,(I-\\Pi_{\\rm dof})^{\\!T}(I-\\Pi_{\\rm dof})}_{S_{\\rm stab}}
-
-这套实现适用于**任意**多边形（2D）与多面体（3D）单元：三角形、四边形、
-五边形、Voronoi 多边形、四面体、六面体都是它的特例。
-
-与早期脚本的差别（见 progress/DECISIONS.md D6）：
-
-* 稳定化项统一取**对称半正定**形式，因此单元刚度矩阵对称正定，可以放心用 CG；
-* 缩放取 :math:`\\sigma=\\mathrm{tr}(A_{\\rm proj})/\\mathrm{tr}(S)`，
-  使两部分量级相当（量纲也自动对齐）；
-* 传 ``stabilization="legacy"`` 可复现旧脚本的 :math:`(I-\\Pi_{\\rm dof})/n` 形式。
+接口保持 FESpace.vem(mesh, degree=k)，局部投影公式位于 vem_local.py。
+支持顶点均值在星形核内的多边形/多面体，三维各面必须共面且满足同样条件。
+后处理使用可计算的多项式投影，不显式构造虚拟基函数。
 """
 
-from __future__ import annotations
+# 模块职责：负责全局自由度与边界的管理；局部积分和投影由 LocalVEM 计算，全局累加复用 BaseFESpace。
+
+
+import numbers
 
 import numpy as np
 
-from ..core.utils import HEX_FACES, TET_FACES, cell_centroid, cell_measure, edge_normals_2d
 from .base import BaseFESpace
+from .vem_local import LocalVEM, scalar_values
 
-__all__ = ["VEMSpace"]
-
-_EPS = 1e-14
+__all__ = ['VEMSpace']
 
 
 class VEMSpace(BaseFESpace):
-    """一次虚拟元空间（顶点型自由度）。"""
-
-    family = "vem"
+    # 协调增强型虚拟元空间，负责全局共享自由度、边界数据和局部投影算子的连接。
+    family = 'vem'
     has_explicit_basis = False
-    _STABILIZATIONS = ("trace", "legacy", "none")
 
-    def __init__(
-        self,
-        mesh,
-        degree: int = 1,
-        stabilization: str = "trace",
-        name: str = None,
-    ):
-        if degree != 1:
-            raise NotImplementedError(
-                "当前只实现了 k=1 虚拟元（每个顶点一个自由度）；"
-                "更高次 k 的接入点见 spaces/vem.py 的 _build_projection。"
-            )
-        if stabilization not in self._STABILIZATIONS:
-            raise ValueError(
-                f"stabilization 需为 {self._STABILIZATIONS} 之一，收到 {stabilization!r}"
-            )
+    def __init__(self, mesh, degree=1, stabilization='trace', name=None):
+        # 检查维度、正整数阶数和稳定化选项，再交给基类按统一顺序建立全局自由度及几何信息。
+        if isinstance(degree, bool) or not isinstance(degree, numbers.Integral) or degree < 1:
+            raise ValueError('VEM 的 degree 必须是正整数 k≥1')
+        if mesh.dim not in (2, 3):
+            raise ValueError('VEM 支持二维和三维网格')
+        if stabilization not in ('trace', 'none', 'legacy'):
+            raise ValueError('stabilization 请选择 trace 或 none')
+        # 兼容旧诊断脚本的参数；legacy 也使用对称的投影核稳定化。
         self.stabilization = stabilization
-        super().__init__(mesh, degree, name or f"VEM-P{degree}")
-        self._proj_cache = {}
+        super().__init__(mesh, degree, name or f'VEM-P{degree}')
 
-    # ------------------------------------------------------------------
-    # 自由度：每个网格顶点一个
-    # ------------------------------------------------------------------
+    # 工作块：递归登记共享自由度。
+    # 顶点编号保持网格编号；相邻单元共享同一条边、同一个面及其全部自由度。
+    # 面/体内部矩是积分值，代表坐标仅供展示，不能当作点值使用。
     def _build_dof_map(self):
-        self.n_dofs = self.mesh.n_nodes
-        self.dof_map = [np.asarray(e, dtype=np.int64) for e in self.mesh.elements]
-        self.dof_support = [(v,) for v in range(self.mesh.n_nodes)]
-        self.dof_is_interior = np.zeros(self.n_dofs, dtype=bool)
+        self._functionals = [('point', p.copy()) for p in self.mesh.nodes]
+        self._entities = {}
+        self.cells = []
+        self._boundary_counts = {}
+
+        def allocate(item):
+            # 把点值或积分矩的定义追加到全局登记表，返回该未知量在全局向量中的编号。
+            self._functionals.append(item)
+            return len(self._functionals) - 1
+
+        def entity(vertices, dim, faces=None, cell_number=None):
+            # 递归建立边、面和单元对象；相同几何实体复用缓存，单元内部矩保持各单元独有。
+            # 边和面以排序后的全局顶点集合为共享键，方向可以相反；体单元额外带 cell_number，内部矩因此不会被邻单元误共享。
+            key = (dim, tuple(sorted(vertices)), cell_number)
+            if key in self._entities:
+                shared = self._entities[key]
+                if dim == 2:
+                    def edge_set(ids):
+                        # 把一个面的边界环转换为无向边集合，用来确认共享面的两种顶点顺序表示同一边界。
+                        return {tuple(sorted((ids[i], ids[(i+1)%len(ids)]))) for i in range(len(ids))}
+                    if edge_set(vertices) != edge_set(shared.vertices):
+                        raise ValueError('共享面的顶点必须按同一个边界环排列，可反向')
+                return shared
+            if dim == 1:
+                vertices = tuple(sorted(vertices))
+                children = []
+            elif dim == 2:
+                children = [entity((vertices[i], vertices[(i+1) % len(vertices)]), 1)
+                            for i in range(len(vertices))]
+            else:
+                children = [entity(tuple(vertices[i] for i in face), 2) for face in faces]
+            local = LocalVEM(vertices, self.mesh.nodes[list(vertices)], dim, self.degree,
+                             children, allocate, self._functionals)
+            self._entities[key] = local
+            return local
+
+        for c, vertices in enumerate(self.mesh.elements):
+            vertices = tuple(int(i) for i in vertices)
+            faces = None
+            if self.mesh.dim == 3:
+                faces = self.mesh.get_cell_faces(c)
+            local = entity(vertices, self.mesh.dim, faces, c)
+            self.cells.append(local)
+            for child in local.children:
+                self._boundary_counts[child] = self._boundary_counts.get(child, 0) + 1
+
+        if any(count > 2 for count in self._boundary_counts.values()):
+            raise ValueError('非流形网格：同一条边/同一个面不能被超过两个单元共享')
+
+        self.dof_map = [cell.dofs for cell in self.cells]
+        self.n_dofs = len(self._functionals)
+        # 统计中只出现一次的边界实体属于区域外边界；取其全部自由度，不只取顶点，才能覆盖高阶边点和面矩。
+        self._boundary = np.array(sorted({int(i) for face, count in self._boundary_counts.items()
+                                         if count == 1 for i in face.dofs}), dtype=int)
+        self.dof_support = [() for _ in range(self.n_dofs)]
+        self.dof_is_interior = np.ones(self.n_dofs, dtype=bool)
+        self.dof_is_interior[self._boundary] = False
 
     def _build_dof_coordinates(self):
-        self.dof_coords = np.array(self.mesh.nodes, dtype=float, copy=True)
+        # 建立自由度的代表坐标；点自由度位于实际点上，积分矩使用所属实体中心作代表。
+        # 矩自由度没有单一点坐标，这里只给它一个所属实体中心作代表；插值和施加边界时仍必须调用积分定义。
+        self.dof_coords = np.array([item[1] if item[0] == 'point' else item[1].center
+                                    for item in self._functionals])
 
-    def reference_nodes(self, cell_idx) -> np.ndarray:
-        return np.zeros((len(self.mesh.elements[cell_idx]), self.mesh.dim))
+    def boundary_dofs(self):
+        # 返回位于区域外边界的全局自由度编号，包含高阶空间需要施加约束的边和面自由度。
+        return self._boundary.copy()
 
-    def reference_element_type(self) -> str:
-        return "polygon" if self.mesh.dim == 2 else "polyhedron"
+    # 工作块：按自由度定义对函数取值。
+    # 边界点取 g(x)，边界面的矩取归一化积分，确保非零 Dirichlet 边界也正确。
+    def _functional_value(self, item, f):
+        if item[0] == 'point':
+            return float(f(item[1]))
+        entity, j = item[1:]
+        x, w = entity.quadrature
+        return float((w * entity.polynomial(x)[:, j]) @ scalar_values(f, x) / entity.measure)
 
-    def get_quadrature(self, order: int = None):
-        raise NotImplementedError(
-            "虚拟元没有参考单元求积规则；误差范数请在 postprocess 中按单元几何计算。"
-        )
+    def boundary_values(self, f, dofs):
+        # 只计算给定边界自由度上的函数数据，正确区分节点值和三维边界面的积分矩。
+        return np.array([self._functional_value(self._functionals[i], f) for i in dofs])
 
-    # ------------------------------------------------------------------
-    # 投影算子
-    # ------------------------------------------------------------------
-    def _cell_faces(self, cell_idx):
-        """返回 ``[(local_indices, outward_normal, area), ...]``。"""
-        coords = self.mesh.get_cell_vertices(cell_idx)
-        d = self.mesh.dim
-        if d == 2:
-            normals, lengths = edge_normals_2d(coords)
-            n = len(coords)
-            return [
-                ([i, (i + 1) % n], normals[i], lengths[i]) for i in range(n)
-            ]
+    def interpolate(self, f):
+        # 按每个自由度的定义离散已知函数；VEM 的内部矩需要积分，不能用中心点值替代。
+        return np.array([self._functional_value(item, f) for item in self._functionals])
 
-        n = len(coords)
-        if n == 4:
-            faces = TET_FACES
-        elif n == 8:
-            faces = HEX_FACES
-        elif self.mesh._faces is not None:
-            faces = self.mesh._faces
-        else:
-            raise ValueError(
-                "3D 虚拟元需要单元的面向量；请通过 Mesh(..., faces=...) 提供，"
-                "或使用四面体 / 六面体网格。"
-            )
+    def reference_nodes(self, cell_idx):
+        # 返回局部自由度的参考位置或代表位置，积分矩的代表位置仅用于几何描述。
+        cell = self.cells[cell_idx]
+        return (self.dof_coords[cell.dofs] - cell.center) / cell.h
 
-        centroid = np.mean(coords, axis=0)
-        out = []
-        for f in faces:
-            face_coords = coords[list(f)]
-            c_face = face_coords.mean(axis=0)
-            if len(f) == 3:
-                raw = np.cross(face_coords[1] - face_coords[0],
-                               face_coords[2] - face_coords[0])
-                area = 0.5 * np.linalg.norm(raw)
-            else:
-                raw = np.zeros(3)
-                area = 0.0
-                tris = [(0, 1, 2), (0, 2, 3)]
-                for (a, b, c) in tris:
-                    nrm = np.cross(face_coords[b] - face_coords[a],
-                                   face_coords[c] - face_coords[a])
-                    raw = raw + nrm
-                    area += 0.5 * np.linalg.norm(nrm)
-            if np.linalg.norm(raw) < _EPS or area < _EPS:
-                continue
-            normal = raw / np.linalg.norm(raw)
-            if np.dot(normal, c_face - centroid) < 0:
-                normal = -normal
-            out.append((list(f), normal, area))
-        return out
+    def reference_element_type(self):
+        # 给出当前空间使用的参考单元类别，供积分及参考基函数接口识别。
+        return 'polygon' if self.mesh.dim == 2 else 'polyhedron'
 
-    def _build_projection(self, cell_idx):
-        """返回 ``(G, Pi, measure, coords, centroid)``。"""
-        hit = self._proj_cache.get(cell_idx)
-        if hit is not None:
-            return hit
+    def get_quadrature(self, order=None):
+        # 查询积分数据；VEM 没有统一参考单元规则，需要改用各实际单元的积分接口。
+        raise NotImplementedError('VEM 按实际单元积分；请用 space.cell_quadrature(cell_idx)')
 
-        coords = self.mesh.get_cell_vertices(cell_idx)
-        n = len(coords)
-        d = self.mesh.dim
-        centroid = cell_centroid(coords)
-        measure = cell_measure(coords)
+    def cell_quadrature(self, cell_idx, order=None):
+        # 返回指定实际单元的积分点和物理权重；请求高于缓存精度的阶数时重新生成。
+        cell = self.cells[cell_idx]
+        if order is not None and order > 2*self.degree+2:
+            return cell.integrate(order)
+        return cell.quadrature
 
-        # 缩放单项式基 m0 = 1, m_{k+1} = x_k - c_k
-        G = np.zeros((d, d + 1))
-        for k in range(d):
-            G[k, k + 1] = 1.0
-        M = measure * (G.T @ G)
+    # 工作块：局部投影公式与原来的全局组装框架连接。
+    def local_stiffness(self, cell_idx):
+        return self.cells[cell_idx].stiffness(self.stabilization)
 
-        rhs = np.zeros((d + 1, n))
-        for (idx, normal, area) in self._cell_faces(cell_idx):
-            for alpha in range(d + 1):
-                dn = float(np.dot(G[:, alpha], normal))
-                if abs(dn) < _EPS:
-                    continue
-                if len(idx) == 2:
-                    # 边：梯形法则把 |e| dn 平均分给两个端点
-                    rhs[alpha, idx[0]] += 0.5 * area * dn
-                    rhs[alpha, idx[1]] += 0.5 * area * dn
-                else:
-                    # 面：三角形按 1/3 分给三个顶点；四边形拆成两个三角形
-                    if len(idx) == 3:
-                        share = area / 3.0 * dn
-                        for v in idx:
-                            rhs[alpha, v] += share
-                    else:
-                        fc = coords[idx]
-                        for (a, b, c) in ((0, 1, 2), (0, 2, 3)):
-                            tri_area = 0.5 * np.linalg.norm(
-                                np.cross(fc[b] - fc[a], fc[c] - fc[a])
-                            )
-                            share = tri_area / 3.0 * dn
-                            for v in (idx[a], idx[b], idx[c]):
-                                rhs[alpha, v] += share
+    def local_mass(self, cell_idx, order=None):
+        # 返回指定单元的质量矩阵，描述离散函数乘积的积分贡献。
+        return self.cells[cell_idx].mass()
 
-        Pi = np.linalg.pinv(M) @ rhs
-        # ---- 常数模式的规范化 ----
-        # 梯度部分是精确的：Pi[1:, :] 给出的就是拟合梯度。
-        # 常数模式必须选成"让投影对线性自由度向量恒等"，否则稳定化项
-        # S = (I-Pi_dof)^T (I-Pi_dof) 会惩罚线性函数，破坏相容性
-        # （在不规则多边形上表现为收敛停滞；见 progress/VERIFICATION.md）。
-        # 由 p(c) = mean(d) - grad(p)·(Vbar - c) 得到
-        vbar = coords.mean(axis=0)
-        Pi[0, :] = 1.0 / n - (vbar - centroid) @ Pi[1:, :]
+    def local_load(self, cell_idx, f, order=None):
+        # 对源项和局部测试函数的乘积积分，得到该单元对全局右端的贡献。
+        return self.cells[cell_idx].load(f)
 
-        out = (G, Pi, measure, coords, centroid)
-        self._proj_cache[cell_idx] = out
-        return out
-
-    # ------------------------------------------------------------------
-    # 单元矩阵
-    # ------------------------------------------------------------------
-    def local_stiffness(self, cell_idx) -> np.ndarray:
-        """单元刚度矩阵 ``A_proj + S_stab``。"""
-        G, Pi, measure, coords, centroid = self._build_projection(cell_idx)
-        n = len(coords)
-        d = self.mesh.dim
-
-        grad_proj = G @ Pi                       # (d, n)
-        A_proj = measure * (grad_proj.T @ grad_proj)
-
-        if self.stabilization == "none":
-            return A_proj
-
-        if self.stabilization == "legacy":
-            D = np.zeros((n, d + 1))
-            D[:, 0] = 1.0
-            D[:, 1:] = coords - centroid
-            Pi_dof = D @ Pi
-            return A_proj + (np.eye(n) - Pi_dof) / n
-
-        # 默认：对称半正定的 trace 缩放
-        D = np.zeros((n, d + 1))
-        D[:, 0] = 1.0
-        D[:, 1:] = coords - centroid
-        Pi_dof = D @ Pi
-        diff = np.eye(n) - Pi_dof
-        S = diff.T @ diff
-        tr_A = float(np.trace(A_proj))
-        tr_S = float(np.trace(S))
-        if tr_S < _EPS:
-            return A_proj
-        sigma = tr_A / tr_S if tr_A > _EPS else 1.0 / measure
-        return A_proj + sigma * S
-
-    # -- 载荷 / 质量：用"扇形线性插值"把虚拟基函数几何化 -----------------
-    def _face_index_triangles(self, cell_idx):
-        """单元表面按三角形展开，返回局部顶点编号三元组的列表。"""
-        coords = self.mesh.get_cell_vertices(cell_idx)
-        n = len(coords)
-        if n == 4:
-            return [tuple(f) for f in TET_FACES]
-        if n == 8:
-            out = []
-            for f in HEX_FACES:
-                out.append((f[0], f[1], f[2]))
-                out.append((f[0], f[2], f[3]))
-            return out
-        if self.mesh._faces is not None:
-            out = []
-            for f in self.mesh._faces:
-                f = [int(i) for i in f]
-                out.append(tuple(f[:3]))
-                if len(f) == 4:
-                    out.append((f[0], f[2], f[3]))
-            return out
-        raise ValueError(
-            "3D 虚拟元需要单元的面向量；请通过 Mesh(..., faces=...) 提供，"
-            "或使用四面体 / 六面体网格。"
-        )
-
-    def _fan_simplices(self, cell_idx):
-        """把单元从形心剖成若干单纯形。
-
-        2D：三角形 ``(形心, v_i, v_{i+1})``；
-        3D：四面体 ``(形心, f_1, f_2, f_3)``（每个面先三角化）。
-
-        Returns
-        -------
-        simplices : list of (coords, local_ids)
-            ``coords`` 是 ``(k, dim)``，``local_ids[0] = -1`` 表示形心，
-            其余元素是该单纯形其余顶点在**单元内**的局部编号。
-        centroid : (dim,) ndarray
-        """
-        coords = self.mesh.get_cell_vertices(cell_idx)
-        centroid = cell_centroid(coords)
-        n = len(coords)
-        simplices = []
-        if self.mesh.dim == 2:
-            for i in range(n):
-                j = (i + 1) % n
-                simplices.append((np.array([centroid, coords[i], coords[j]]), [-1, i, j]))
-        else:
-            for (a, b, c) in self._face_index_triangles(cell_idx):
-                simplices.append(
-                    (np.array([centroid, coords[a], coords[b], coords[c]]), [-1, a, b, c])
-                )
-        return simplices, centroid
-
-    @staticmethod
-    def _barycentric(k: int, points: np.ndarray):
-        """参考单纯形上 ``k`` 个顶点的重心坐标值（k = dim+1）。"""
-        if k == 3:
-            s, t = points[:, 0], points[:, 1]
-            return np.column_stack([1.0 - s - t, s, t])
-        s, t, u = points[:, 0], points[:, 1], points[:, 2]
-        return np.column_stack([1.0 - s - t - u, s, t, u])
-
-    def _fan_integrals(self, cell_idx, f=None, order: int = 4):
-        """逐扇单纯形计算 ``∫ f L_k``。
-
-        Returns
-        -------
-        simplices : list of (local_ids, integrals)
-        centroid : (dim,) ndarray
-        """
-        from ..core.quadrature import QuadratureRule
-        from ..core.utils import simplex_jacobian
-
-        simplices, centroid = self._fan_simplices(cell_idx)
-        dim = self.mesh.dim
-        rule = QuadratureRule.get_quadrature("triangle" if dim == 2 else "tet", order)
-        L = self._barycentric(dim + 1, rule.points)
-        out = []
-        for (coords, ids) in simplices:
-            J, detJ = simplex_jacobian(coords)
-            pts = coords[0] + rule.points @ J.T
-            w = rule.weights * abs(detJ)
-            fv = 1.0 if f is None else self._evaluate_function(f, pts)
-            out.append((ids, (L * (w * fv)[:, None]).sum(axis=0)))
-        return out, centroid
-
-    def _centroid_values(self, cell_idx):
-        """每个虚拟基函数在形心处的插值。
-
-        取"顶点自由度 → 线性最小二乘重构"在形心处的值：它保证
-        (i) 对线性自由度向量精确（线性再生），
-        (ii) 单位分解 ``sum_j c0[j] = 1``（因为 sum_j phi_j = 1）。
-        对三角形 / 四边形分别退化到 1/3 与 1/4。
-        """
-        pinvA = self.reconstruction_matrix(cell_idx)
-        _, centroid = self._fan_simplices(cell_idx)
-        row = np.concatenate([[1.0], centroid])
-        return row @ pinvA
-
-    def local_load(self, cell_idx, f, order: int = 4) -> np.ndarray:
-        """单元载荷向量。
-
-        虚拟基函数没有显式表达式，因此用**扇形三角剖分上的分片线性插值**
-        近似：
-
-        .. math::
-
-           \\int_K f\\varphi_j \\approx
-             c_0[j]\\sum_i \\!\\int_{T_i}\\! f L_0
-             + \\int_{T_j}\\! f L_1 + \\int_{T_{j-1}}\\! f L_2
-
-        对三角形网格这是精确的；对一般多边形它保持正确的几何权重。
-        （旧脚本里一律用 ``|K|/n``，会让短边上的顶点被严重高估，
-        在不规则多边形上直接导致收敛停滞——见 progress/VERIFICATION.md。）
-        """
-        n = len(self.mesh.elements[cell_idx])
-        pieces, _ = self._fan_integrals(cell_idx, f, order)
-        c0 = self._centroid_values(cell_idx)
-        b = np.zeros(n)
-        for (ids, integ) in pieces:
-            b += integ[0] * c0
-            for k, lid in enumerate(ids[1:], start=1):
-                b[lid] += integ[k]
-        return b
-
-    def local_mass(self, cell_idx, order: int = 4) -> np.ndarray:
-        """单元质量矩阵：与载荷向量使用同一套扇形线性插值。
-
-        三角形网格上就是精确的 P1 质量矩阵；一般多边形上它对称、半正定，
-        行和等于 :math:`\\int_K\\varphi_j`（与载荷向量相容）。
-        """
-        from ..core.quadrature import QuadratureRule
-        from ..core.utils import simplex_jacobian
-
-        dim = self.mesh.dim
-        n = len(self.mesh.elements[cell_idx])
-        simplices, _ = self._fan_simplices(cell_idx)
-        c0 = self._centroid_values(cell_idx)
-        rule = QuadratureRule.get_quadrature("triangle" if dim == 2 else "tet", order)
-        from ..core.utils import simplex_jacobian
-
-        L = self._barycentric(dim + 1, rule.points)
-        M = np.zeros((n, n))
-        coeff = np.zeros((dim + 1, n))
-        for (coords, ids) in simplices:
-            _, detJ = simplex_jacobian(coords)
-            w = rule.weights * abs(detJ)
-            coeff[:] = 0.0
-            coeff[0, :] = c0
-            for k, lid in enumerate(ids[1:], start=1):
-                coeff[k, lid] = 1.0
-            gram = np.einsum("qk,ql,q->kl", L, L, w)
-            M += coeff.T @ gram @ coeff
-        return 0.5 * (M + M.T)
-
-    # ------------------------------------------------------------------
-    # 全局矩阵
-    # ------------------------------------------------------------------
     def stiffness_matrix(self):
+        # 将所有局部刚度贡献组装为全局矩阵；混合空间若不适用此标量接口会明确拒绝。
         return self._assemble(self.local_stiffness, symmetric=True)
 
     def mass_matrix(self):
+        # 将局部质量贡献组装为全局矩阵；特殊空间的块结构由其专用接口提供。
         return self._assemble(self.local_mass, symmetric=True)
 
     def load_vector(self, f):
+        # 按单元计算源项载荷，再按全局自由度编号累加成右端向量。
         return self._assemble_vector(lambda c: self.local_load(c, f))
 
-    # ------------------------------------------------------------------
-    # 自由度 → 函数值（误差分析 / 可视化用）
-    # ------------------------------------------------------------------
+    # 工作块：后处理使用可计算投影，兼容原来的误差与绘图接口。
+    # 点值来自 Pi_L2 u，梯度来自 grad(Pi_grad u)，不宣称是虚拟函数的精确求值。
     def reconstruction_matrix(self, cell_idx):
-        """返回单元内线性最小二乘重构的系数 ``(a, b)``，``u(x) ≈ a + b·x``。
+        return self.cells[cell_idx].data[4]
 
-        虚拟元没有显式基函数，但在顶点自由度上对一次多项式做最小二乘拟合，
-        得到的是与 ``u_h`` 同阶（``O(h^2)``）的连续重构，可用于误差范数与绘图。
-        """
-        coords = self.mesh.get_cell_vertices(cell_idx)
-        A = np.column_stack([np.ones(len(coords)), coords])
-        # 返回伪逆，便于乘自由度向量
-        return np.linalg.pinv(A)
+    def evaluate(self, cell_idx, values, points):
+        # 取出当前单元的自由度，通过 L2 投影得到多项式系数，再在指定物理点计算函数值。
+        cell = self.cells[cell_idx]
+        coefficients = cell.data[4] @ np.asarray(values)[cell.dofs]
+        return cell.polynomial(points) @ coefficients
 
-    def evaluate(self, cell_idx, values, points) -> np.ndarray:
-        """把单元自由度值重构成函数值并在一组物理点上求值。"""
-        points = np.atleast_2d(np.asarray(points, dtype=float))
-        values = np.asarray(values, dtype=float).ravel()
-        dofs = self.get_cell_dofs(cell_idx)
-        local_vals = values[dofs]
-        pinvA = self.reconstruction_matrix(cell_idx)
-        coef = pinvA @ local_vals
-        pts = np.column_stack([np.ones(len(points)), points])
-        return pts @ coef
+    def evaluate_gradient(self, cell_idx, values, points):
+        # 由局部自由度重构采样点的物理梯度；若该空间没有此标量梯度接口则明确报错。
+        cell = self.cells[cell_idx]
+        coefficients = cell.data[3] @ np.asarray(values)[cell.dofs]
+        return np.einsum('qid,i->qd', cell.gradient(points), coefficients)
 
-    def evaluate_gradient(self, cell_idx, values, points) -> np.ndarray:
-        """重构解的梯度（每个单元内是常数，等于最小二乘拟合的线性系数）。"""
-        points = np.atleast_2d(np.asarray(points, dtype=float))
-        values = np.asarray(values, dtype=float).ravel()
-        dofs = self.get_cell_dofs(cell_idx)
-        coef = self.reconstruction_matrix(cell_idx) @ values[dofs]
-        grad = coef[1:]
-        return np.tile(grad, (len(points), 1))
-
-    def interpolate(self, f) -> np.ndarray:
-        """虚拟元的"插值"就是取函数在顶点上的值。"""
-        return self._evaluate_function(f, self.mesh.nodes)
+    def nodal_values(self, values):
+        # 顶点本身就是点自由度，绘图直接取顶点值。
+        return np.asarray(values)[:self.mesh.n_nodes].copy()

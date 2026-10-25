@@ -19,6 +19,11 @@
     print(quad.n_points, quad.weights.sum())   # 4 0.5
 """
 
+# 模块职责：数值积分规则
+# 用若干求积点处的函数值乘权重之和近似积分；不同单元形状需要不同的参考规则。
+# 先构造参考单元的规则，再映射到实际单元；映射后的权重还需乘面积或体积的缩放因子。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -79,6 +84,7 @@ class QuadratureRule:
     """参考单元上的求积规则。"""
 
     def __init__(self, points, weights, element_type: str, order: int):
+        # 保存参考积分点、权重、单元类型与阶数，统一后续积分规则的查询接口。
         self.points = np.atleast_2d(np.asarray(points, dtype=float))
         self.weights = np.asarray(weights, dtype=float).ravel()
         self.element_type = str(element_type).lower()
@@ -96,9 +102,11 @@ class QuadratureRule:
         return int(self.points.shape[1])
 
     def __len__(self) -> int:
+        # 提供 len(对象) 接口，使调用方能直接查询此对象定义的数量。
         return self.n_points
 
     def __repr__(self) -> str:  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return (
             f"<QuadratureRule {self.element_type} order={self.order} "
             f"n_points={self.n_points} measure={self.weights.sum():.6g}>"
@@ -156,6 +164,8 @@ class QuadratureRule:
 # ---------------------------------------------------------------------------
 def _triangle_rule(order: int):
     """参考三角形（面积 1/2）上的求积规则，精确到给定 total degree。"""
+    if order > 4:
+        return _duffy_rule(2, order)
     if order <= 1:
         pts = [[1 / 3, 1 / 3]]
         w = [0.5]
@@ -184,6 +194,8 @@ def _triangle_rule(order: int):
 
 def _tet_rule(order: int):
     """参考四面体（体积 1/6）上的求积规则。"""
+    if order > 3:
+        return _duffy_rule(3, order)
     if order <= 1:
         pts = [[0.25, 0.25, 0.25]]
         w = [1 / 6]
@@ -197,6 +209,29 @@ def _tet_rule(order: int):
                [1 / 6, 0.5, 1 / 6], [1 / 6, 1 / 6, 0.5], [1 / 6, 1 / 6, 1 / 6]]
         w = [-0.8 / 6] + [0.45 / 6] * 4
     return np.array(pts, dtype=float), np.array(w, dtype=float)
+
+
+def _duffy_rule(dim, order):
+    """高阶单纯形求积：把单位方体的 Gauss 点通过 Duffy 映射压到单纯形。
+
+    点数随 order 增加，不再将所有高阶请求截断成固定的低阶规则。
+    映射的雅可比也计入权重，因此权重和分别为 1/2、1/6。
+    """
+    from itertools import product
+
+    n = max(1, (int(order) + dim + 1) // 2)
+    x, w = _gauss_legendre_1d(n)
+    indices = np.array(list(product(range(n), repeat=dim)))
+    t = x[indices]
+    weights = np.prod(w[indices], axis=1)
+    points = np.zeros_like(t)
+    remaining = np.ones(len(t))
+    for axis in range(dim):
+        points[:, axis] = remaining * t[:, axis]
+        if axis < dim - 1:
+            weights *= (1.0 - t[:, axis]) ** (dim - 1 - axis)
+        remaining *= 1.0 - t[:, axis]
+    return points, weights
 
 
 def get_quadrature(element_type: str, order: int = 2) -> QuadratureRule:
@@ -296,29 +331,16 @@ def cell_quadrature(mesh, cell_idx: int, order: int = 3):
 
     # 3D 多面体
     centroid = cell_centroid(coords)
-    faces = None
-    if len(coords) == 4:
-        faces = TET_FACES
-    elif len(coords) == 8:
-        faces = HEX_FACES
-    elif getattr(mesh, "_faces", None) is not None:
-        faces = mesh._faces
-    if faces is None:
-        raise ValueError(
-            "无法自动为 3D 多面体单元生成求积点；请通过 Mesh(..., faces=...) "
-            "提供有序的面（每个面是顶点局部编号列表）。"
-        )
+    faces = mesh.get_cell_faces(cell_idx)
 
     rule = QuadratureRule.get_quadrature("tet", order)
     pts = []
     wts = []
     for f in faces:
         fv = [int(i) for i in f]
-        tris = [(fv[0], fv[1], fv[2])]
-        if len(fv) == 4:
-            tris.append((fv[0], fv[2], fv[3]))
-        for tri in tris:
-            tet = np.array([centroid, coords[tri[0]], coords[tri[1]], coords[tri[2]]])
+        face_center = coords[fv].mean(axis=0)
+        for i in range(len(fv)):
+            tet = np.array([centroid, face_center, coords[fv[i]], coords[fv[(i+1)%len(fv)]]])
             J, detJ = simplex_jacobian(tet)
             pts.append(tet[0] + rule.points @ J.T)
             wts.append(rule.weights * abs(detJ))

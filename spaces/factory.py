@@ -12,6 +12,11 @@
    Vr = FESpace.rt0(mesh)                  # RT0×P0 混合元
 """
 
+# 模块职责：按空间类型创建对象
+# 将用户选择的空间族和多项式次数转交给 LagrangeSpace、VEMSpace 或 RT0Space。
+# 工厂只负责选用哪种实现；各类空间的自由度、积分和组装仍由对应类完成。
+
+
 from __future__ import annotations
 
 from .lagrange import LagrangeSpace
@@ -44,7 +49,7 @@ class FESpace:
 
     @staticmethod
     def vem(mesh, degree: int = 1, **kwargs) -> VEMSpace:
-        """虚拟元空间（k=1，任意多边形 / 多面体）。"""
+        """k 阶协调增强型虚拟元（整数 degree≥1，多边形 / 多面体）。"""
         return VEMSpace(mesh, degree=degree, **kwargs)
 
     @staticmethod

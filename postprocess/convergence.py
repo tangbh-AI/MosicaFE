@@ -16,6 +16,11 @@
                                  refinement_levels=5, plot=True)
 """
 
+# 模块职责：多层网格的收敛实验
+# 反复创建更细网格和对应问题，求解后记录网格尺寸 h 与各类误差。
+# 这些数据用于估计误差随 h 减小的速度；误差曲线及收敛阶可以帮助判断实现是否达到预期精度。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -25,6 +30,8 @@ from .error import compute_errors, estimate_convergence_rate, rate_table
 __all__ = ["convergence_study", "estimate_convergence_rate", "rate_table"]
 
 
+# 工作块：在多层网格上重复求解
+# 调用 mesh_factory 和 problem_factory 建立每一层问题，求解并收集 h 与误差；最后按选项绘图，将数据返回给调用方继续分析。
 def convergence_study(
     mesh_factory,
     problem_factory,

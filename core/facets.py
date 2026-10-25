@@ -37,6 +37,11 @@
 这一入口，同一个网格只构建一次。
 """
 
+# 模块职责：共享面的编号和方向
+# 为每个几何面建立唯一全局编号，同时记录它属于哪些单元，以及全局法向与局部外法向是否同向。
+# RT0 以面通量为未知量，相邻单元必须共享同一编号；signs 用于在全局方向与局部外法向之间转换。
+
+
 from __future__ import annotations
 
 from typing import Tuple
@@ -160,6 +165,7 @@ class FacetTopology:
         n_cells: int,
         dim: int,
     ) -> None:
+        # 保存全局面编号、相邻单元及局部定向符号，使 RT0 的共享通量有统一几何约定。
         self.facets = facets
         self.cell_facets = cell_facets
         self.signs = signs
@@ -185,10 +191,12 @@ class FacetTopology:
 
     @property
     def n_boundary(self) -> int:
+        # 统计只有一个相邻单元的全局面数量，作为区域边界面的数量。
         return int(np.count_nonzero(self.counts == 1))
 
     @property
     def n_interior(self) -> int:
+        # 统计两个单元共同拥有的全局面数量，作为内部共享面的数量。
         return int(np.count_nonzero(self.counts == 2))
 
     def boundary_facets(self) -> np.ndarray:
@@ -204,6 +212,7 @@ class FacetTopology:
         return np.linalg.norm(self.normals, axis=1)
 
     def summary(self) -> str:
+        # 生成对象的简短状态说明，便于核对网格规模、空间类型或自由度数量。
         return (
             f"FacetTopology(dim={self.dim}, cells={self.n_cells}, "
             f"facets={self.n_facets}, interior={self.n_interior}, "
@@ -211,9 +220,12 @@ class FacetTopology:
         )
 
     def __repr__(self) -> str:  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return self.summary()
 
 
+# 工作块：识别共享面并确定法向符号
+# 将每个局部面的顶点编号排序作为唯一键，合并相邻单元的同一面；再依据单元几何判断局部外法向与全局方向的关系。
 def build_facet_topology(mesh) -> FacetTopology:
     """由单纯形 :class:`~MosicaFE.core.mesh.Mesh` 构建面拓扑。
 

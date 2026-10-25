@@ -10,6 +10,11 @@
 这样物理层（`physics`）只需要做矩阵的线性组合，新增 PDE 时不必重复写单元循环。
 """
 
+# 模块职责：离散空间的公共骨架
+# 定义自由度、边界识别、插值、求值及全局组装的共同接口，具体空间补充自己的基函数和局部矩阵。
+# 自由度是近似解的独立系数；dof_map 将每个单元的局部系数对应到共享的全局编号。
+
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -29,6 +34,7 @@ class BaseFESpace(ABC):
     has_explicit_basis = False
 
     def __init__(self, mesh, degree: int = 1, name: str = None):
+        # 初始化统一空间接口的自由度、坐标与求积缓存，再调用子类完成实际自由度构造。
         self.mesh = mesh
         self.degree = int(degree)
         self.name = name or f"{self.family}{self.degree}"
@@ -44,6 +50,7 @@ class BaseFESpace(ABC):
     # 构造
     # ------------------------------------------------------------------
     def _build(self):
+        # 按固定顺序建立自由度编号、代表坐标与支撑信息，保证后续边界识别和组装使用同一布局。
         self._build_dof_map()
         self._build_dof_coordinates()
         self._finalize_support()
@@ -69,6 +76,7 @@ class BaseFESpace(ABC):
         self.dof_coords = coords / counts[:, None]
 
     def _finalize_support(self):
+        # 核对自由度的几何支撑和内部标记长度，补齐子类未提供的默认信息。
         if len(self.dof_support) != self.n_dofs:
             self.dof_support = [() for _ in range(self.n_dofs)]
         if len(self.dof_is_interior) != self.n_dofs:
@@ -86,6 +94,7 @@ class BaseFESpace(ABC):
         return np.asarray(self.dof_map[cell_idx], dtype=np.int64)
 
     def n_cell_dofs(self, cell_idx: int) -> int:
+        # 查询指定单元的局部自由度数量，允许不同单元有不同大小的局部矩阵。
         return int(len(self.dof_map[cell_idx]))
 
     def get_dof_coordinates(self, dof: int) -> np.ndarray:
@@ -94,6 +103,7 @@ class BaseFESpace(ABC):
 
     # guidebook 中使用的私有名
     def _get_dof_coordinates(self, dof: int) -> np.ndarray:
+        # 保留旧的私有查询名称，实际转交公共的自由度代表坐标接口。
         return self.get_dof_coordinates(dof)
 
     def boundary_dofs(self) -> np.ndarray:
@@ -111,6 +121,7 @@ class BaseFESpace(ABC):
         return np.array(out, dtype=np.int64)
 
     def dof_boundary_mask(self) -> np.ndarray:
+        # 将边界自由度编号转换为布尔掩码，方便按位置批量筛选。
         mask = np.zeros(self.n_dofs, dtype=bool)
         mask[self.boundary_dofs()] = True
         return mask
@@ -141,18 +152,22 @@ class BaseFESpace(ABC):
         return max(1, 2 * (self.degree - 1))
 
     def mass_quad_order(self) -> int:
+        # 为基函数乘积积分选择求积阶，保证质量项不会只沿用刚度项所需的较低阶数。
         return max(1, 2 * self.degree)
 
     def load_quad_order(self) -> int:
+        # 为源项与基函数的乘积选择求积阶，给非多项式源函数保留更高的积分精度。
         return max(2, 2 * self.degree + 2)
 
     # ------------------------------------------------------------------
     # 基函数（仅显式基函数空间可用）
     # ------------------------------------------------------------------
     def eval_basis(self, xi):
+        # 提供参考点上的基函数值接口；是否可以显式计算由具体离散空间决定。
         raise NotImplementedError(f"{type(self).__name__} 没有显式基函数")
 
     def eval_basis_grad(self, xi):
+        # 提供参考基函数导数接口，实际梯度还需结合单元几何变换。
         raise NotImplementedError(f"{type(self).__name__} 没有显式基函数")
 
     # ------------------------------------------------------------------
@@ -181,7 +196,7 @@ class BaseFESpace(ABC):
         """在单元 ``cell_idx`` 内把自由度向量 ``values`` 重构成函数并在点上求值。
 
         返回 ``(n_points,)``。子类必须实现；这是 FEM 与 VEM 在
-        "解函数能不能在任意点求值"上的接缝（VEM 用最小二乘线性重构）。
+        "解函数能不能在任意点求值"上的接缝（VEM 使用可计算的 k 次多项式投影）。
         """
         raise NotImplementedError(
             f"{type(self).__name__} 未实现 evaluate()"
@@ -197,7 +212,7 @@ class BaseFESpace(ABC):
         """把自由度向量还原成**网格节点上的值**（可视化 / 后处理用）。
 
         做法：在每个单元内用 :meth:`evaluate` 在单元顶点处求值，再按节点平均。
-        对 Lagrange 空间这就是精确的节点值；对 VEM 是最小二乘重构值。
+        对 Lagrange 空间这就是精确的节点值；VEM 重写此方法直接读取顶点自由度。
         """
         values = np.asarray(values, dtype=float).ravel()
         out = np.zeros(self.mesh.n_nodes)
@@ -214,6 +229,8 @@ class BaseFESpace(ABC):
     # ------------------------------------------------------------------
     # 组装工具
     # ------------------------------------------------------------------
+    # 工作块：把单元矩阵装入全局矩阵
+    # 逐单元取得局部矩阵和全局自由度编号，展开为行号、列号、数值三元组；重复位置相加，表示相邻单元共同作用于共享自由度。
     def _assemble(self, local_matrix, *, symmetric=False, desc=""):
         """逐单元调用 ``local_matrix(cell)`` 并累加到全局稀疏矩阵。"""
         n = self.n_dofs
@@ -235,6 +252,8 @@ class BaseFESpace(ABC):
             A = 0.5 * (A + A.T)
         return A
 
+    # 工作块：累加单元载荷
+    # 将各单元的局部向量按 dof_map 写入全局右端；使用 add.at 处理重复编号，确保共享节点的贡献不会丢失。
     def _assemble_vector(self, local_vector):
         b = np.zeros(self.n_dofs)
         for c in range(self.mesh.n_cells):
@@ -260,6 +279,7 @@ class BaseFESpace(ABC):
         return np.array([float(f(p)) for p in points])
 
     def solve(self, *args, **kwargs):  # pragma: no cover - 便于交互探查
+        # 使用本对象约定的求解入口；离散空间本身只提供组装数据，物理问题对象负责求解方程。
         raise NotImplementedError(
             "空间本身不求解；请构造 physics 中的问题对象后调用 problem.solve()"
         )
@@ -268,6 +288,7 @@ class BaseFESpace(ABC):
     # 展示
     # ------------------------------------------------------------------
     def __repr__(self):  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return (
             f"<{type(self).__name__} {self.name} dim={self.mesh.dim} "
             f"degree={self.degree} n_dofs={self.n_dofs} "
@@ -275,13 +296,16 @@ class BaseFESpace(ABC):
         )
 
     def summary(self) -> str:
+        # 生成对象的简短状态说明，便于核对网格规模、空间类型或自由度数量。
         return repr(self)
 
     # 便于外部按需拿到参考维数
     @property
     def dim(self) -> int:
+        # 返回当前对象对应的空间维数，二维为 2、三维为 3。
         return int(self.mesh.dim)
 
     @property
     def ref_dim(self) -> int:
+        # 返回参考单元所在的坐标维数，供基函数、映射和积分规则选择使用。
         return reference_dimension(self.reference_element_type())

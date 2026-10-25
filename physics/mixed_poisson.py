@@ -38,6 +38,11 @@
 像 H1 协调空间那样做"消行消列"。
 """
 
+# 模块职责：同时求通量和压力的混合方程
+# 从 RT0 空间取得 M、B 和单元载荷，组装 [[M,-B.T],[B,0]] 形式的鞍点系统。
+# 可直接解整个块系统，也可先消去通量形成压力的 Schur 系统；最终统一返回局部通量和压力。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -60,6 +65,7 @@ class MixedPoissonProblem(BasePhysics):
 
     def __init__(self, space, f=None, g=None, quadrature_order: int = 3,
                  lumped: bool = None, **kwargs):
+        # 核对混合空间和边界支持范围，准备通量、压力及块系统相关的求解状态。
         super().__init__(space, f=f, g=g, **kwargs)
         if not getattr(space, "is_mixed", False):
             raise TypeError(
@@ -92,6 +98,8 @@ class MixedPoissonProblem(BasePhysics):
     # ------------------------------------------------------------------
     # 组装：空间给块，物理层只做组合（DECISIONS.md D3）
     # ------------------------------------------------------------------
+    # 工作块：组装通量与压力耦合系统
+    # 从 RT0 空间获得 M、B 和压力载荷，构造带零压力对角块的鞍点矩阵；第一组方程联系通量与压力，第二组方程约束单元守恒。
     def assemble(self):
         """组装鞍点系统，返回 ``(A, b)``。
 
@@ -144,6 +152,8 @@ class MixedPoissonProblem(BasePhysics):
         self.solution = sol
         return self.extract(sol)
 
+    # 工作块：消去通量后求压力
+    # 先求 X = M⁻¹B.T，再求解 (B X)P = f，最后恢复通量 Phi = X P；代码通过线性求解得到 X，而不是显式构造 M 的逆矩阵。
     def _solve_schur(self) -> np.ndarray:
         """静力凝聚：``M Φ = Bᵀ P``，``B M^{-1} Bᵀ P = f_e``。"""
         V = self.space
@@ -166,6 +176,8 @@ class MixedPoissonProblem(BasePhysics):
     # ------------------------------------------------------------------
     # 提取
     # ------------------------------------------------------------------
+    # 工作块：把全局混合解转换成用户结果
+    # 按通量与压力的全局布局拆开向量；面通量经局部方向符号转换后形成逐单元外法向通量 Q，压力则直接按单元保存为 P。
     def extract(self, sol):
         """把解向量拆成 ``(Q, P)``：``Q`` 是逐单元的**外法向**面通量。"""
         V = self.space
@@ -230,6 +242,8 @@ class MixedPoissonProblem(BasePhysics):
             out[k] = V.evaluate_flux(c, self.flux, p[None, :])[0]
         return out
 
+    # 工作块：检查每个单元的质量平衡
+    # 比较单元外法向通量总和与单元源项积分；差值应接近数值舍入和求解误差，可用于发现符号或组装错误。
     def check_conservation(self, tol: float = 1e-8):
         """检查离散质量守恒 :math:`\\sum_i Q_{K,i}=\\int_K f`，返回最大偏差。"""
         if self.flux is None or self.source is None:
@@ -244,6 +258,7 @@ class MixedPoissonProblem(BasePhysics):
 
     # ------------------------------------------------------------------
     def _split(self, solution):
+        # 统一接收压力向量或通量/压力二元组，拆成后续误差接口使用的 Q、P 数据。
         if isinstance(solution, (tuple, list)) and len(solution) == 2:
             return np.asarray(solution[0], float), np.asarray(solution[1], float)
         P = np.asarray(solution, dtype=float).ravel()
@@ -255,6 +270,7 @@ class MixedPoissonProblem(BasePhysics):
         return self.flux, P
 
     def __repr__(self):  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return (
             f"<MixedPoissonProblem space={self.space.name} dim={self.mesh.dim} "
             f"flux={self.space.n_flux} pressure={self.space.n_pressure}>"

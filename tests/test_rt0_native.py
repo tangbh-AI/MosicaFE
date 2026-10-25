@@ -12,6 +12,11 @@
 不依赖任何外部有限元后端。
 """
 
+# 模块职责：验证 RT0 的几何、矩阵和守恒
+# 从共享面方向、单位法向通量基函数开始，逐步检查质量块、散度块、插值和混合求解。
+# 闭式积分与求积结果互相对照；直接法与 Schur 法互相对照，局部守恒进一步检查解的物理一致性。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -25,14 +30,17 @@ from MosicaFE.spaces.rt0 import rt0_flux_basis, rt0_mass_matrices
 
 
 def exact2(x):
+    # 定义二维制造解，供后续源项、插值和误差测试共享同一基准。
     return np.sin(np.pi * x[0]) * np.sin(np.pi * x[1])
 
 
 def source2(x):
+    # 给出二维精确解对应的负 Laplace，保证源项和验证用的解属于同一问题。
     return 2.0 * np.pi ** 2 * exact2(x)
 
 
 def grad2(x):
+    # 返回二维制造解的梯度，用来检查梯度重构和 H1 半范数误差。
     return np.array(
         [
             np.pi * np.cos(np.pi * x[0]) * np.sin(np.pi * x[1]),
@@ -42,6 +50,7 @@ def grad2(x):
 
 
 def flux2(x):
+    # 给出二维精确通量，即精确解的负梯度，供 RT0 重构与误差测试比较。
     return -grad2(x)
 
 
@@ -90,6 +99,7 @@ def test_facet_topology_orientation():
 
 
 def test_facet_topology_rejects_non_simplex():
+    # 验证目标：面拓扑的 RT0 专用入口拒绝非单纯形几何。
     with pytest.raises(ValueError):
         build_facet_topology(mf.Mesh.rectangle(nx=2, ny=2, element_type="quad"))
     with pytest.raises(ValueError):
@@ -97,6 +107,7 @@ def test_facet_topology_rejects_non_simplex():
 
 
 def test_local_facets_are_opposite_to_vertices():
+    # 验证目标：单纯形的第 i 个局部面恰好不包含第 i 个顶点。
     assert local_facets(2) == ((1, 2), (0, 2), (0, 1))
     assert local_facets(3) == ((1, 2, 3), (0, 2, 3), (0, 1, 3), (0, 1, 2))
 
@@ -164,6 +175,7 @@ def test_rt0_mass_matrix_is_orientation_independent():
 
 
 def test_lumped_mass_is_diagonally_dominant():
+    # 验证目标：集中 RT0 质量矩阵满足该近似所需的对角占优性质。
     v = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
     M = rt0_mass_matrices(v[None, ...], lumped=True)[0]
     assert np.all(np.diag(M) > 0)
@@ -177,6 +189,7 @@ def test_lumped_mass_is_diagonally_dominant():
 # 空间层
 # ---------------------------------------------------------------------------
 def test_space_dof_layout_and_coordinates():
+    # 验证目标：通量与压力的全局布局、数量和代表坐标保持一致。
     mesh = mf.Mesh.rectangle(nx=4, ny=4)
     V = mf.FESpace.rt0(mesh)
     assert V.n_flux == mesh.facet_topology.n_facets
@@ -207,6 +220,7 @@ def test_space_reference_nodes_map_back_to_dofs():
 
 
 def test_global_blocks_have_expected_structure():
+    # 验证目标：混合空间返回的质量块、散度块维数与全局未知量布局一致。
     mesh = mf.Mesh.rectangle(nx=6, ny=6)
     V = mf.FESpace.rt0(mesh)
     M = V.flux_mass_matrix()
@@ -238,6 +252,7 @@ def test_interpolate_flux_matches_face_integrals():
 
 
 def test_interpolate_pressure_is_cell_average():
+    # 验证目标：P0 压力插值使用单元平均值，而不是随意选取的中心点值。
     mesh = mf.Mesh.rectangle(nx=3, ny=3)
     V = mf.FESpace.rt0(mesh)
     lin = lambda x: 1.0 + 2.0 * x[0] - 3.0 * x[1]          # noqa: E731
@@ -249,6 +264,7 @@ def test_interpolate_pressure_is_cell_average():
 
 
 def test_mixed_space_rejects_single_operator_api():
+    # 验证目标：混合空间拒绝不适用的单一标量矩阵入口。
     V = mf.FESpace.rt0(mf.Mesh.rectangle(nx=2, ny=2))
     for call in (V.stiffness_matrix, V.mass_matrix, lambda: V.load_vector(source2)):
         with pytest.raises(NotImplementedError):
@@ -261,6 +277,7 @@ def test_mixed_space_rejects_single_operator_api():
 # 物理层
 # ---------------------------------------------------------------------------
 def test_direct_and_schur_agree():
+    # 验证目标：整块直接求解与消去通量后的 Schur 求解应得到一致结果。
     mesh = mf.Mesh.rectangle(nx=8, ny=8)
     V = mf.FESpace.rt0(mesh)
     p1 = mf.MixedPoissonProblem(V, f=source2)
@@ -275,6 +292,7 @@ def test_direct_and_schur_agree():
 
 
 def test_conservation_on_3d_mesh():
+    # 验证目标：每个三维单元的外法向净流出量等于源项体积分。
     mesh = mf.Mesh.box(nx=2, ny=2, nz=2, element_type="tet")
     V = mf.FESpace.rt0(mesh)
     problem = mf.MixedPoissonProblem(V, f=lambda x: 1.0 + x[0] * x[1])
@@ -286,6 +304,7 @@ def test_conservation_on_3d_mesh():
 
 
 def test_flux_at_points_reproduces_local_reconstruction():
+    # 验证目标：通量查询接口与单元 RT0 基函数重构结果一致。
     mesh = mf.Mesh.rectangle(nx=6, ny=6)
     V = mf.FESpace.rt0(mesh)
     problem = mf.MixedPoissonProblem(V, f=source2)
@@ -320,12 +339,14 @@ def test_mixed_error_norms_native_implementation():
 
 
 def test_nonhomogeneous_dirichlet_is_rejected():
+    # 验证目标：当前 RT0 物理问题不支持非齐次边界时应明确报错。
     V = mf.FESpace.rt0(mf.Mesh.rectangle(nx=2, ny=2))
     with pytest.raises(NotImplementedError):
         mf.MixedPoissonProblem(V, f=source2, g=lambda x: 1.0)
 
 
 def test_solve_poisson_api_uses_native_rt0():
+    # 验证目标：高层 Poisson 入口选择库内 RT0 实现，并返回混合解。
     mesh = mf.Mesh.rectangle(nx=6, ny=6)
     out = mf.solve_poisson(mesh, element="RT0", f=source2)
     assert isinstance(out, tuple) and len(out) == 2

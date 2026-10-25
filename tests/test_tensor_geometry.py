@@ -17,6 +17,11 @@
 必须精确、旋转 / 畸变网格上的 patch test 必须精确、收敛阶必须达到理论值。
 """
 
+# 模块职责：验证旋转与畸变网格上的坐标变换
+# 用有限差分对照雅可比，再检查逆映射、梯度变换、局部刚度与旋转后的收敛性。
+# 非轴对齐网格可以暴露雅可比转置或梯度方向的错误，这些问题在规则方格上可能被隐藏。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -38,6 +43,7 @@ from MosicaFE.core.utils import (
 # 辅助：旋转 / 畸变网格与标定的制造解
 # ---------------------------------------------------------------------------
 def rotation(angle_deg, dim=2):
+    # 构造旋转矩阵，用于生成非轴对齐几何和相应的精确解变换。
     th = np.deg2rad(angle_deg)
     c, s = np.cos(th), np.sin(th)
     if dim == 2:
@@ -83,6 +89,7 @@ def distorted_hex_mesh(n, sigma=0.04, seed=0):
 def pulled_back_solution(R, dim):
     """把 sin(πξ₁)… 沿 R 拉回：在**旋转后**的区域边界上恰好为 0。"""
     def exact(x):
+        # 提供已知精确解，用于制造源项并评估数值误差；求解过程中无需把精确解作为未知量输入。
         xi = R.T @ np.asarray(x, dtype=float)
         if dim == 2:
             return np.sin(np.pi * xi[0]) * np.sin(np.pi * xi[1])
@@ -159,6 +166,7 @@ def test_jacobian_convention_consistent_between_simplex_and_tensor():
 
 
 def test_compute_jacobian_defaults_to_reference_center():
+    # 验证目标：省略参考点时，雅可比接口按约定在参考单元中心计算。
     quad = np.array([[0.0, 0.0], [1.0, 0.1], [1.2, 1.0], [0.1, 0.9]])
     J_default, det_default = compute_jacobian(quad)
     J_center, det_center = compute_jacobian(quad, np.array([0.5, 0.5]))
@@ -232,6 +240,7 @@ def test_patch_test_on_distorted_and_rotated_quad(degree):
 
 
 def test_patch_test_on_distorted_hex():
+    # 验证目标：畸变六面体上的线性精确解仍能满足补片测试。
     lin = lambda x: 1.0 + x[0] - 2.0 * x[1] + 0.5 * x[2]   # noqa: E731
     mesh = distorted_hex_mesh(2, sigma=0.25, seed=13)
     V = mf.FESpace.lagrange(mesh, 1)
@@ -241,6 +250,7 @@ def test_patch_test_on_distorted_hex():
 
 
 def _l2_sequence(mesh_factory, degree, dim, levels):
+    # 在一组网格尺度上计算 L2 误差序列，供后续比较几何变换后的收敛行为。
     hs, errs = [], []
     for n in levels:
         mesh, R = mesh_factory(n)
@@ -256,6 +266,7 @@ def _l2_sequence(mesh_factory, degree, dim, levels):
 def test_q1_is_invariant_under_rotation_and_converges():
     """Q1 在旋转区域上的误差必须与轴对齐时相同，且保持二阶收敛。"""
     def factory(angle):
+        # 按给定网格尺度创建当前测试所需的网格或问题，使加密实验重复使用同一设置。
         return lambda n: (rotated_mesh(n, angle, "quad"), rotation(angle, 2))
 
     hs0, e0 = _l2_sequence(factory(0), 1, 2, (4, 8, 16))
@@ -267,7 +278,9 @@ def test_q1_is_invariant_under_rotation_and_converges():
 
 
 def test_q2_converges_on_rotated_quad_mesh():
+    # 验证目标：二次张量积空间在旋转网格上保持应有的误差收敛行为。
     def factory(n):
+        # 按给定网格尺度创建当前测试所需的网格或问题，使加密实验重复使用同一设置。
         return rotated_mesh(n, 30, "quad"), rotation(30, 2)
 
     hs, e = _l2_sequence(factory, 2, 2, (4, 8))
@@ -275,7 +288,9 @@ def test_q2_converges_on_rotated_quad_mesh():
 
 
 def test_q1_hex_converges_on_rotated_box():
+    # 验证目标：三维一次张量积空间在旋转长方体网格上正常收敛。
     def factory(n):
+        # 按给定网格尺度创建当前测试所需的网格或问题，使加密实验重复使用同一设置。
         return rotated_mesh(n, 30, "hex"), rotation(30, 3)
 
     hs, e = _l2_sequence(factory, 1, 3, (2, 4, 8))
@@ -285,6 +300,7 @@ def test_q1_hex_converges_on_rotated_box():
 def test_p1_triangle_is_unaffected():
     """单纯形分支本来就正确，旋转后误差同样应当相同。"""
     def factory(angle):
+        # 按给定网格尺度创建当前测试所需的网格或问题，使加密实验重复使用同一设置。
         return lambda n: (rotated_mesh(n, angle, "triangle"), rotation(angle, 2))
 
     hs0, e0 = _l2_sequence(factory(0), 1, 2, (4, 8))

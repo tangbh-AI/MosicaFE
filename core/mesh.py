@@ -12,6 +12,11 @@
 生成的网格全部使用 **逆时针（2D）/ 正体积（3D）** 取向。
 """
 
+# 模块职责：网格的存储、拓扑和生成
+# nodes 保存物理坐标，elements 保存单元的节点编号；面、邻接关系和边界由这些数据推导。
+# 前半部分统一单元取向并查询几何信息，后半部分提供区间、矩形、长方体及多边形网格工厂。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -45,7 +50,8 @@ class Mesh:
     boundary_nodes : array_like, optional
         显式指定边界节点；缺省时由 facet 拓扑自动判定。
     faces : sequence, optional
-        仅用于 3D 任意多面体：每个单元的面（顶点索引子列表）。
+        三维面的局部顶点编号，可给公共模板 faces[面][顶点]，
+        或逐单元给 faces[单元][面][顶点]，允许单元顶点数、面数不同。
     name : str
         便于在日志里识别。
     """
@@ -62,6 +68,7 @@ class Mesh:
         faces=None,
         name: str = "",
     ):
+        # 把坐标和变长连接表整理成数值数组，识别逐单元面列表，再准备拓扑缓存和边界信息。
         self.nodes = np.ascontiguousarray(np.asarray(nodes, dtype=float))
         if self.nodes.ndim != 2:
             raise ValueError("nodes 必须是 (n_nodes, dim) 的二维数组")
@@ -73,6 +80,14 @@ class Mesh:
         self.element_type = str(element_type).lower()
         self.name = name
         self._faces = faces
+        self._per_cell_faces = None
+        if faces is not None:
+            if not len(faces) or not len(faces[0]):
+                raise ValueError('faces 不能为空')
+            if not np.isscalar(faces[0][0]):
+                if len(faces) != len(self.elements):
+                    raise ValueError('逐单元 faces 的长度必须等于单元数')
+                self._per_cell_faces = faces
         self._spec = None
         self._facets = None
         self._facet_to_cells = None
@@ -87,6 +102,8 @@ class Mesh:
         )
 
     # -- 取向修正 --------------------------------------------------------
+    # 工作块：统一几何取向
+    # 二维单元按逆时针排列，三维四面体调整为正体积方向；这样后续面积符号、外法向和积分公式可以使用一致约定。
     def _orient_elements(self):
         """把 2D 单元统一为逆时针、3D 四面体统一为正体积。"""
         et = self.element_type
@@ -98,7 +115,7 @@ class Mesh:
             self.dim == 3 and et == "polyhedron"
         ):
             for k, e in enumerate(self.elements):
-                if len(e) == 4:
+                if len(e) == 4 and self._faces is None:
                     a, b, c, d = self.nodes[e]
                     if np.linalg.det(np.array([b - a, c - a, d - a])) < 0:
                         self.elements[k] = e[[0, 2, 1, 3]].copy()
@@ -113,20 +130,24 @@ class Mesh:
 
     @property
     def n_nodes(self) -> int:
+        # 返回几何顶点数量；高阶空间增加的边自由度和积分矩不计入这里。
         return int(self.nodes.shape[0])
 
     #: guidebook / VEM 老代码里的叫法
     @property
     def n_vertices(self) -> int:
+        # 兼容旧接口的顶点计数名称，数值与 n_nodes 一致。
         return self.n_nodes
 
     @property
     def n_cells(self) -> int:
+        # 返回单元数量，二维表示多边形数量，三维表示体单元数量。
         return len(self.elements)
 
     #: VEM 老代码里的叫法
     @property
     def n_elements(self) -> int:
+        # 兼容旧接口的单元计数名称，数值与 n_cells 一致。
         return self.n_cells
 
     @property
@@ -145,7 +166,26 @@ class Mesh:
     # ------------------------------------------------------------------
     # facet 拓扑与边界
     # ------------------------------------------------------------------
-    def _cell_facets(self, cell):
+    def get_cell_faces(self, cell_idx):
+        """三维单元的面，返回单元内局部顶点编号；显式 faces 优先于形状推断。"""
+        cell = self.elements[cell_idx]
+        if self._per_cell_faces is not None:
+            faces = self._per_cell_faces[cell_idx]
+        elif self._faces is not None:
+            faces = self._faces
+        elif len(cell) == 4:
+            faces = TET_FACES
+        elif len(cell) == 8:
+            faces = HEX_FACES
+        else:
+            raise ValueError('三维多面体需提供 faces[单元][面][局部顶点]')
+        result = [tuple(int(i) for i in f) for f in faces]
+        if any(len(f) < 3 or len(set(f)) != len(f) or min(f) < 0 or max(f) >= len(cell)
+               for f in result):
+            raise ValueError('每个面至少含三个不同的有效局部顶点，且沿边界排列')
+        return result
+
+    def _cell_facets(self, cell, cell_idx=None):
         """返回单元 cell 的 facet 列表（每个 facet 是排序后的顶点元组）。"""
         et = self.element_type
         if self.dim == 1:
@@ -154,24 +194,19 @@ class Mesh:
             n = len(cell)
             return [tuple(sorted((int(cell[i]), int(cell[(i + 1) % n])))) for i in range(n)]
         # 3D
-        if len(cell) == 4:
-            return [tuple(sorted(int(cell[i]) for i in f)) for f in TET_FACES]
-        if len(cell) == 8 and et in ("hex", "hexahedron", "polyhedron"):
-            return [tuple(sorted(int(cell[i]) for i in f)) for f in HEX_FACES]
-        if self._faces is not None:
-            return [tuple(sorted(int(cell[i]) for i in f)) for f in self._faces]
-        raise ValueError(
-            "无法自动推导该 3D 单元的 facet 拓扑；请通过 faces=... 显式给出每个单元的面，"
-            "或使用受支持的六面体/四面体顶点顺序。"
-        )
+        if cell_idx is None:
+            cell_idx = next(i for i, e in enumerate(self.elements) if np.array_equal(e, cell))
+        return [tuple(sorted(int(cell[i]) for i in f)) for f in self.get_cell_faces(cell_idx)]
 
+    # 工作块：从单元连接关系建立面邻接表
+    # 枚举各单元的面，将同一个几何面归为一组并记录所属单元；只出现一次的面构成边界，出现两次的面连接相邻单元。
     def _build_facets(self):
         if self._facets is not None:
             return
         facets = []
         owners = {}
         for c, cell in enumerate(self.elements):
-            for f in self._cell_facets(cell):
+            for f in self._cell_facets(cell, c):
                 facets.append(f)
                 owners.setdefault(f, []).append(c)
         self._facets = facets
@@ -245,7 +280,19 @@ class Mesh:
 
     def get_cell_measure(self, cell_idx: int) -> float:
         """单元面积 / 体积 / 长度。"""
-        return cell_measure(self.get_cell_vertices(cell_idx))
+        coords = self.get_cell_vertices(cell_idx)
+        if self.dim == 3:
+            # 用实际面剖分，不能从顶点数量猜测任意多面体的体积。
+            center = coords.mean(axis=0)
+            volume = 0.0
+            for face in self.get_cell_faces(cell_idx):
+                fv = coords[list(face)]
+                fc = fv.mean(axis=0)
+                for i in range(len(fv)):
+                    J = np.array([fc-center, fv[i]-center, fv[(i+1)%len(fv)]-center])
+                    volume += abs(np.linalg.det(J))/6.0
+            return float(volume)
+        return cell_measure(coords)
 
     def get_cell_diameter(self, cell_idx: int) -> float:
         """单元直径。"""
@@ -256,9 +303,11 @@ class Mesh:
         return cell_centroid(self.get_cell_vertices(cell_idx))
 
     def cell_measures(self) -> np.ndarray:
+        # 逐单元计算面积或体积，结果按单元编号排列，可用于积分及总区域测度检查。
         return np.array([self.get_cell_measure(c) for c in range(self.n_cells)])
 
     def cell_centroids(self) -> np.ndarray:
+        # 逐单元收集形心坐标，供几何查询、显示与单元数据定位使用。
         return np.vstack([self.get_cell_centroid(c) for c in range(self.n_cells)])
 
     def get_mesh_size(self) -> float:
@@ -274,11 +323,14 @@ class Mesh:
         )
 
     def __repr__(self):  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return self.summary()
 
     # ------------------------------------------------------------------
     # 细化
     # ------------------------------------------------------------------
+    # 工作块：创建更细的网格
+    # 根据网格保存的生成信息增加细分数量，重新构造同一区域的网格；它返回新的网格，供网格加密实验使用。
     def refine_uniform(self) -> "Mesh":
         """均匀加密（把每个方向的网格数翻倍）。
 
@@ -310,6 +362,8 @@ class Mesh:
         mesh._spec = {"factory": "interval", "a": a, "b": b, "nx": nx}
         return mesh
 
+    # 工作块：生成矩形区域的结构网格
+    # 先在两个坐标方向生成节点，再按网格小块构造连接表；根据 element_type 保留四边形或拆为三角形，最后返回 Mesh 对象。
     @classmethod
     def rectangle(
         cls,
@@ -329,6 +383,7 @@ class Mesh:
         nodes = np.column_stack([X.ravel(), Y.ravel()])
 
         def nid(i, j):
+            # 将规则网格的坐标方向下标转换为节点数组中的全局编号，供单元连接表复用。
             return j * (nx + 1) + i
 
         elements = []
@@ -358,6 +413,8 @@ class Mesh:
         }
         return mesh
 
+    # 工作块：生成长方体区域的结构网格
+    # 先生成三维节点，再按所选单元和剖分模式建立六面体或四面体连接；相邻小块必须使用兼容的面剖分。
     @classmethod
     def box(
         cls,
@@ -388,7 +445,9 @@ class Mesh:
         nodes = np.column_stack([g.ravel() for g in grids])
 
         def nid(i, j, k):
-            return (k * (ny + 1) + j) * (nx + 1) + i
+            # indexing="ij" 后按 C 顺序展平，最后的 z 下标变化最快。
+            # 与节点存储顺序一致，nx、ny、nz 不相等时才不会连接到错误的点。
+            return (i * (ny + 1) + j) * (nz + 1) + k
 
         elements = []
         if et in _TET_ALIASES:
@@ -430,6 +489,8 @@ class Mesh:
     # ------------------------------------------------------------------
     # 工厂：多边形网格
     # ------------------------------------------------------------------
+    # 工作块：通过 Voronoi 划分生成多边形网格
+    # 从区域内种子点构造各自的近邻区域，并将多边形限制在目标边界内；合并共享顶点后建立统一节点编号。
     @classmethod
     def voronoi_polygon(
         cls,
@@ -472,6 +533,7 @@ class Mesh:
         all_verts = []
 
         def get_or_add(v):
+            # 按坐标键复用已有节点，避免相邻单元在同一位置生成互不共享的重复顶点。
             key = (round(float(v[0]), 10), round(float(v[1]), 10))
             if key not in vert_map:
                 vert_map[key] = len(all_verts)
@@ -506,6 +568,7 @@ class Mesh:
         nodes = []
 
         def grid_id(i, j):
+            # 将二维网格的行列位置转换为共享的基础顶点编号。
             return j * (nx + 1) + i
 
         for j in range(ny + 1):
@@ -515,6 +578,7 @@ class Mesh:
         mp_map = {}
 
         def get_midpoint(i, j_row):
+            # 为指定网格边登记唯一的中点编号，让相邻多边形使用同一节点。
             key = (i, j_row)
             if key not in mp_map:
                 mp_map[key] = len(nodes)
@@ -538,6 +602,15 @@ class Mesh:
         return mesh
 
     # ------------------------------------------------------------------
+    # 三维 Voronoi 多面体：每个单元保存自己的面，不要求公共拓扑模板。
+    @classmethod
+    def voronoi_polyhedron(cls, n_points=24, seed=42, bbox=(0., 1., 0., 1., 0., 1.)):
+        """生成长方体内协调的非结构三维 Voronoi 网格，需要 SciPy。"""
+        from .polyhedral import voronoi_arrays
+        nodes, elements, faces = voronoi_arrays(n_points, seed, bbox)
+        return cls(nodes, elements, 'polyhedron', faces=faces,
+                   name=f'voronoi3d({n_points})')
+
     # 从数组构造
     # ------------------------------------------------------------------
     @classmethod
@@ -600,6 +673,7 @@ def _box_tet_center(nodes, nid, nx, ny, nz):
     n_grid = (nx + 1) * (ny + 1) * (nz + 1)
 
     def center_id(i, j, k):
+        # 将结构网格的小块编号转换为额外中心节点编号，确保生成四面体时引用正确的节点。
         return n_grid + (k * ny + j) * nx + i
 
     corners_of = lambda i, j, k: {
@@ -646,6 +720,7 @@ def _clip_polygon(poly, bbox):
     out = np.asarray(poly, dtype=float)
 
     def clip_edge(pts, edge):
+        # 沿一条区域边界裁剪多边形，保留内部顶点，并在跨越边界的位置补上交点。
         if len(pts) == 0:
             return pts
         result = []
@@ -696,6 +771,7 @@ def _dedupe_consecutive(poly, tol: float = 1e-9):
 
 
 def _intersect(p1, p2, edge, bbox):
+    # 计算裁剪边界与多边形边的交点，供 Voronoi 单元截断到目标矩形使用。
     xmin, xmax, ymin, ymax = bbox
     if edge in (0, 1):
         x = xmin if edge == 0 else xmax

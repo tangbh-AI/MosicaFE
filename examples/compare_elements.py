@@ -3,6 +3,11 @@
 这正是把三套程序整合成一个库之后才方便做的事。
 """
 
+# 模块职责：比较不同元的收敛表现
+# 在逐渐加密的网格上重复求解同一制造解问题，记录各类元的误差与估计收敛阶。
+# 连续空间与混合空间分别处理，因为前者的未知量是解系数，后者同时包含通量和压力。
+
+
 import os
 import sys
 
@@ -19,14 +24,17 @@ os.makedirs(OUT, exist_ok=True)
 
 
 def exact(x):
+    # 提供已知精确解，用于制造源项并评估数值误差；求解过程中无需把精确解作为未知量输入。
     return np.sin(np.pi * x[0]) * np.sin(np.pi * x[1])
 
 
 def source(x):
+    # 给出制造解对应的源项 f=-Δu，供单元载荷积分调用。
     return 2.0 * np.pi ** 2 * exact(x)
 
 
 def exact_grad(x):
+    # 返回精确解各坐标方向的偏导数，供 H1 半范数误差评估使用。
     return np.array(
         [
             np.pi * np.cos(np.pi * x[0]) * np.sin(np.pi * x[1]),
@@ -36,10 +44,12 @@ def exact_grad(x):
 
 
 def zero(x):
+    # 统一提供零函数，作为齐次边界值或零源项传入求解接口。
     return 0.0
 
 
 def study_h1(label, space_factory, levels=(4, 8, 16, 32), mesh_factory=None):
+    # 逐层生成网格并求解连续空间问题，记录 h、L2/H1 误差并估计网格加密后的收敛速度。
     mesh_factory = mesh_factory or (lambda n: Mesh.rectangle(nx=n, ny=n))
     hs, l2, h1 = [], [], []
     for n in levels:
@@ -65,6 +75,7 @@ def study_h1(label, space_factory, levels=(4, 8, 16, 32), mesh_factory=None):
 
 
 def study_mixed(levels=(4, 8, 16, 32)):
+    # 重复求解 RT0 混合问题，分别处理通量和压力，再汇总压力随网格加密的误差。
     hs, l2 = [], []
     for n in levels:
         mesh = Mesh.rectangle(nx=n, ny=n)
@@ -82,6 +93,7 @@ def study_mixed(levels=(4, 8, 16, 32)):
 
 
 def main():
+    # 组织同一制造解的不同空间对照实验，分别输出连续空间与 RT0 混合空间的收敛结果。
     print("=" * 78)
     print("同一 Poisson 问题、不同离散方法的对比")
     print("=" * 78)

@@ -6,14 +6,18 @@
 * ``"H1"`` —— :math:`|u-u_h|_{H^1(\\Omega)}`（半范数），需要精确梯度
 * ``"Linf"`` —— :math:`\\|u-u_h\\|_{L^\\infty}`，取自由度点与求积点的最大值
 
-关于 VEM：虚拟元没有显式基函数，因此 :meth:`VEMSpace.evaluate` 用的是
-**顶点自由度上的线性最小二乘重构**（与 :math:`u_h` 同阶）。
-这样算出的收敛阶与真实 :math:`u_h` 是一致的，具体数值见 progress/VERIFICATION.md。
+关于 VEM：点值使用 k 次 L2 投影，梯度使用 k 次 H1 投影。
+这里衡量可计算投影的误差，不是不可见虚拟函数本身的精确误差。
 
 关于 RT0×P0：压力是分片常数、通量是显式的向量多项式，两者都可以逐点求值，
 因此混合格式的误差范数 :func:`mixed_error_norms` 与 H1 协调空间用的是同一套
 单元求积循环，只是把 :math:`u_h` 换成 :math:`(p_h,q_h)`。
 """
+
+# 模块职责：数值解的误差评估
+# 在单元求积点重构数值解，与精确解或精确梯度比较，再对各单元贡献求和。
+# L2 衡量函数值的积分误差，H1 半范数衡量梯度误差；混合格式分别统计压力和通量的误差。
+
 
 from __future__ import annotations
 
@@ -35,10 +39,12 @@ __all__ = [
 
 # ---------------------------------------------------------------------------
 def _eval_scalar(space, f, points) -> np.ndarray:
+    # 通过空间的公共函数求值接口，在一组物理点上得到标量函数值。
     return space._evaluate_function(f, points)
 
 
 def _eval_vector(g, points) -> np.ndarray:
+    # 逐个物理点调用向量场函数，将返回的各分量排列为点数乘空间维数的数组。
     points = np.atleast_2d(np.asarray(points, dtype=float))
     return np.vstack([np.asarray(g(p), dtype=float).ravel() for p in points])
 
@@ -83,7 +89,10 @@ def compute_errors(problem, solution, exact, exact_grad=None, quad_order=None):
     linf = 0.0
 
     for c in range(mesh.n_cells):
-        pts, w = cell_quadrature(mesh, c, quad_order)
+        if hasattr(space, "cell_quadrature"):
+            pts, w = space.cell_quadrature(c, quad_order)
+        else:
+            pts, w = cell_quadrature(mesh, c, quad_order)
         if exact is not None:
             uh = space.evaluate(c, u, pts)
             ue = _eval_scalar(space, exact, pts)
@@ -99,8 +108,14 @@ def compute_errors(problem, solution, exact, exact_grad=None, quad_order=None):
     try:
         if exact is None:
             raise RuntimeError("no exact solution given")
-        ud = _eval_scalar(space, exact, space.dof_coords)
-        linf = max(linf, float(np.max(np.abs(u - ud))) if u.size else 0.0)
+        if getattr(space, "family", None) == "vem":
+            # 积分矩与点值单位不同；这里仅比较顶点点值。
+            nodal = space.nodal_values(u)
+            ud = _eval_scalar(space, exact, mesh.nodes)
+            linf = max(linf, float(np.max(np.abs(nodal - ud))) if nodal.size else 0.0)
+        else:
+            ud = _eval_scalar(space, exact, space.dof_coords)
+            linf = max(linf, float(np.max(np.abs(u - ud))) if u.size else 0.0)
     except Exception:
         pass
 
@@ -129,6 +144,8 @@ def _mixed_errors(problem, solution, exact, exact_flux):
 
 
 # ---------------------------------------------------------------------------
+# 工作块：分别评估混合解的压力和通量
+# 逐单元选择求积点，将常数压力与重构通量和精确场比较；累加加权平方误差后开方，同时记录采样点上的最大偏差。
 def mixed_error_norms(space, P, Q, p_exact, q_exact=None, quadrature_order=None):
     """RT0×P0 混合格式的误差范数（原生实现，不依赖任何外部后端）。
 
@@ -197,18 +214,23 @@ def compute_error(problem, solution, exact, norm_type: str = "L2", exact_grad=No
 
 
 def l2_error(problem, solution, exact):
+    # 转交通用误差接口并选择 L2 范数，保持简洁的专用调用形式。
     return compute_error(problem, solution, exact, "L2")
 
 
 def h1_error(problem, solution, exact_grad):
+    # 转交通用误差接口并选择 H1 半范数，需要精确梯度作比较。
     return compute_errors(problem, solution, None, exact_grad=exact_grad)["H1"]
 
 
 def linf_error(problem, solution, exact):
+    # 转交通用误差接口并选择采样最大误差，不将其解释为连续区域上的严格上确界。
     return compute_error(problem, solution, exact, "Linf")
 
 
 # ---------------------------------------------------------------------------
+# 工作块：从误差序列估计收敛阶
+# 对 h 与误差取对数，拟合 log(error) ≈ p*log(h)+常数；斜率 p 表示网格尺寸缩小时误差下降的幂次。
 def estimate_convergence_rate(h_values, errors, use_last: int = None) -> float:
     """由 ``(h, e)`` 序列估计收敛阶：``rate = log(e1/e2) / log(h1/h2)``。
 

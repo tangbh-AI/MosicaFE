@@ -48,6 +48,11 @@
 取 ``reaction_coeff=k**2``。
 """
 
+# 模块职责：Helmholtz 方程的离散
+# 使用扩散刚度减去 k² 倍质量矩阵，构造 A = kappa*K - k²*M，并检查参数和空间是否支持。
+# 负的质量项可能使系统不再正定，因此求解方法需要考虑矩阵性质。
+
+
 from __future__ import annotations
 
 from .base import BasePhysics
@@ -80,6 +85,7 @@ class HelmholtzProblem(BasePhysics):
 
     def __init__(self, space, f=None, g=None, k=1.0, kappa=1.0,
                  source=None, **kwargs):
+        # 初始化公共物理数据，再检查波数和扩散系数的实数约束，供刚度减质量形式的组装使用。
         if f is None and source is not None:
             f = source
         super().__init__(space, f=f, g=g, **kwargs)
@@ -99,6 +105,8 @@ class HelmholtzProblem(BasePhysics):
         return float(value)
 
     # ------------------------------------------------------------------
+    # 工作块：形成波动问题的离散方程
+    # 将 kappa 倍刚度与 -k² 倍质量相加，右端由源项积分得到；边界处理完成后返回线性系统。
     def assemble(self):
         """组装 ``kappa*K - k**2*M`` 与载荷向量，并施加 Dirichlet 条件。"""
         A = self.space.stiffness_matrix() - self.k ** 2 * self.space.mass_matrix()
@@ -110,6 +118,7 @@ class HelmholtzProblem(BasePhysics):
 
     # ------------------------------------------------------------------
     def __repr__(self):  # pragma: no cover - 仅展示
+        # 返回对象的可读说明，方便交互查看；此方法只组织展示信息。
         return (
             f"<HelmholtzProblem space={self.space.name} k={self.k:g} "
             f"kappa={self.kappa:g} dofs={self.n_dofs}>"

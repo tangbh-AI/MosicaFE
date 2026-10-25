@@ -1,14 +1,14 @@
-% !TEX root = MosicaFE_Guidebook.tex
+% !TEX root = MosicaFE_Guidebook_zh.tex
 % ===========================================================================
-%  MosicaFE_Guidebook.tex
+%  MosicaFE_Guidebook_zh.tex
 %
 %  MosicaFE 使用说明（按 guidebook.pdf 的模板撰写）
 %
 %  编译方式（推荐 xelatex，因为正文含中文）：
-%      xelatex MosicaFE_Guidebook.tex
-%      xelatex MosicaFE_Guidebook.tex      % 第二遍生成目录与交叉引用
+%      xelatex MosicaFE_Guidebook_zh.tex
+%      xelatex MosicaFE_Guidebook_zh.tex      % 第二遍生成目录与交叉引用
 %
-%  或者：latexmk -xelatex MosicaFE_Guidebook.tex
+%  或者：latexmk -xelatex MosicaFE_Guidebook_zh.tex
 % ===========================================================================
 \documentclass[UTF8,11pt,oneside]{ctexbook}
 
@@ -18,9 +18,10 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{array}
+\newsavebox{\guideTableBox}
 \usepackage{graphicx}
 \usepackage{listings}
-\usepackage{upquote}
+\usepackage{textcomp} % Upright quotes for listings; no separate upquote dependency.
 \usepackage{xcolor}
 \usepackage{tcolorbox}
 \usepackage{algorithm}
@@ -32,6 +33,7 @@
 \usepackage[hidelinks]{hyperref}
 
 \geometry{a4paper,left=2.6cm,right=2.6cm,top=2.8cm,bottom=2.8cm}
+\emergencystretch=3em
 
 % ---------------------------------------------------------------------------
 % 代码排版
@@ -122,7 +124,7 @@
        \Large 统一调用 FEM、VEM 与 RT0 求解偏微分方程的 Python 库\\[0.6em]
        \large 使用手册与开发指南}
 \author{\normalsize MosicaFE contributors}
-\date{\normalsize 2026 年 9 月 20 日}
+\date{\normalsize \today}
 
 % ===========================================================================
 \begin{document}
@@ -238,7 +240,7 @@ plot_solution(u, mesh, V, filename="p2.png")  # (4) 选可视化
 print(problem.compute_errors(u, exact))
 \end{lstlisting}
 
-把第 \ref{lst:quicksplit} 行中的 \code{FESpace.lagrange(mesh, degree=2)}
+把第 \ref{lst:quicksplit} 行中的 \code{FESpace.lagrange(mesh,\allowbreak  degree=2)}
 换成 \code{FESpace.vem(mesh)}，得到的就不再是有限元，
 而是\textbf{同一个方程}在\textbf{同一种网格}上的虚拟元解；程序其它部分一字不改。
 
@@ -253,6 +255,7 @@ print(problem.compute_errors(u, exact))
 \centering
 \caption{\mosica{} 的模块划分}
 \label{tab:modules}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lp{10.4cm}@{}}
 \toprule
 模块 & 职责 \\
@@ -261,7 +264,7 @@ print(problem.compute_errors(u, exact))
 \textbf{面拓扑与定向}（\code{facets.py}，$H(\mathrm{div})$ 协调空间的基础）、
 求积规则、几何工具（面积、体积、雅可比、梯度变换） \\
 \module{spaces} & 离散空间：\code{LagrangeSpace}（P1/P2/Q1/Q2）、
-\code{VEMSpace}（$k=1$ 虚拟元）、\code{RT0Space}（RT0$\times$P0），
+\code{VEMSpace}（任意正整数 $k$ 阶增强型虚拟元）、\code{RT0Space}（RT0$\times$P0），
 以及工厂 \code{FESpace} \\
 \module{physics} & PDE 弱形式与组装：\code{PoissonProblem}、
 \code{MixedPoissonProblem}、\code{ReactionDiffusionProblem}，含 PDE 注册表 \\
@@ -270,12 +273,16 @@ print(problem.compute_errors(u, exact))
 收敛性研究、可视化、混合格式（压力 + 通量）的误差范数 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{important}
 FEM、VEM、RT0 三类元\textbf{全部是库自身的实现}：RT0$\times$P0 的显式基函数、
-精确质量矩阵、面拓扑与鞍点组装分别位于 \code{spaces/rt0.py}、
-\code{core/facets.py} 与 \code{physics/mixed\_poisson.py}，
+精确质量矩阵、面拓扑与鞍点组装分别位于 \path{spaces/rt0.py}、
+\path{core/facets.py} 与 \path{physics/mixed_poisson.py}，
 \mosica{} 不依赖、也不需要接入任何外部有限元后端。
 \end{important}
 
@@ -311,6 +318,7 @@ Python 3.12.10（conda 环境 \code{fealpy}），\code{numpy} 2.2.4、
 \centering
 \caption{依赖关系}
 \label{tab:deps}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lll@{}}
 \toprule
 包 & 是否必需 & 用途 \\
@@ -320,6 +328,10 @@ Python 3.12.10（conda 环境 \code{fealpy}），\code{numpy} 2.2.4、
 \code{matplotlib} & 可选 & 可视化 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 缺少 \code{scipy} 时，\mosica{} 自动退化为纯 \code{numpy} 的稠密实现
@@ -379,8 +391,8 @@ python -m pytest MosicaFE/tests -q
 本文档使用 \code{ctexbook} 文档类，正文含中文，需要用 XeLaTeX{} 编译两遍：
 
 \begin{lstlisting}[style=shell]
-xelatex MosicaFE_Guidebook.tex
-xelatex MosicaFE_Guidebook.tex
+xelatex MosicaFE_Guidebook_zh.tex
+xelatex MosicaFE_Guidebook_zh.tex
 \end{lstlisting}
 
 在 TeXShop 中把引擎选为 \code{XeLaTeX} 并点击 Typeset 即可。
@@ -457,6 +469,7 @@ b_i=\int_\Omega f\varphi_i\dif x .
 \centering
 \caption{\mosica{} 中 Lagrange 元的信息}
 \label{tab:lagrange}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llcc@{}}
 \toprule
 单元 & 名字 & 每个单元的局部自由度 & 自由度类型 \\
@@ -471,127 +484,136 @@ b_i=\int_\Omega f\varphi_i\dif x .
 六面体 & Q2 & 27 & 顶点 + 棱 + 面 + 体 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
-\section{虚拟元离散（VEM）}
+\section{任意阶虚拟元离散（VEM）}
 \label{sec:vem-math}
+本库实现二维、三维的协调增强型虚拟元。设置正整数 \code{degree=k} 即选择阶数，
+不再限于一阶。整体流程仍为网格、空间、方程、求解和后处理；局部计算由
+\path{spaces/vem_local.py} 的 \code{LocalVEM} 递归完成，
+\path{spaces/vem.py} 的 \code{VEMSpace} 管理共享自由度与全局组装。
+虚拟基函数无需显式求值，所需积分通过多项式投影和自由度获得。
 
-虚拟元方法的关键思想是：\textbf{不需要写出基函数的显式表达式}。
-一次（$k=1$）虚拟元空间定义为
+\subsection{局部空间与自由度}
+设 $\mathcal P_r(E)$ 为实体 $E$ 上总次数不超过 $r$ 的多项式，$r<0$ 时为空间 $\{0\}$。
+取 $\mathcal B_k^*(K)$ 为缩放单项式基中总次数恰为 $k-1$ 或 $k$ 的部分。
+二维单元、三维单元及三维的二维面递归使用增强空间
 
 \begin{equation}
-V_h(K)=\Bigl\{v\in H^1(K):\ \Delta v\in\mathcal{P}_1(K),\
-v|_e\in\mathcal{P}_1(e)\ \forall e\subset\partial K\Bigr\},
+\begin{split}
+V_k(K)=\{v\in H^1(K):\;&v|_{\partial K}\text{ continuous},\quad
+v|_F\in V_k(F),\quad \Delta v\in\mathcal P_k(K),\\
+&(v-\Pi_k^\nabla v,m)_K=0\quad\forall m\in\mathcal B_k^*(K)\}.
+\end{split}
 \label{eq:vem-space}
 \end{equation}
+二维中 $F$ 是边，$V_k(F)=\mathcal P_k(F)$；三维中 $F$ 是平面多边形面。
+增强约束使高阶矩可由梯度投影补齐，不增加未知量。自由度依次为：
+\begin{enumerate}[itemsep=0.2em]
+\item 每个顶点的函数值；每条边内部 $k-1$ 个等距点的函数值。
+\item 二维单元、三维面上的归一化矩 $|E|^{-1}\int_E v m_\alpha$，$|\alpha|\le k-2$。
+\item 三维单元内部同样的归一化体矩，$|\alpha|\le k-2$。
+\end{enumerate}
+共享顶点、边、面的自由度只分配一次。$k=1$ 时只有顶点自由度。
+若单元有 $n_v$ 个顶点、$n_e$ 条边、$n_f$ 个面，则
 
-其自由度就是每个顶点上的函数值。单元上的双线性型被拆成两部分：
+\begin{align*}
+N_K^{2D}&=n_v+n_e(k-1)+\frac{k(k-1)}2,\\
+N_K^{3D}&=n_v+n_e(k-1)+n_f\frac{k(k-1)}2+
+\frac{(k-1)k(k+1)}6.
+\end{align*}
+
+\subsection{缩放单项式与梯度投影}
+\code{powers(dim,\allowbreak k)} 枚举 $|\alpha|\le k$，因此算法不需要为每个阶数另写一套公式。
+实体中心 $c_E$ 取顶点坐标的算术平均，$h_E$ 取直径，
+$m_\alpha(x)=\prod_j(((x-c_E)Q_E)_j/h_E)^{\alpha_j}$。
+三维面上的 $Q_E$ 是由 SVD 得到的正交平面基；体单元使用坐标轴。
+梯度投影满足
 
 \begin{equation}
-a_h(u_h,v_h)=\underbrace{a\bigl(\Pi^{\nabla}u_h,\Pi^{\nabla}v_h\bigr)}_{A_{\rm proj}}
-+\underbrace{S_K\bigl((I-\Pi)u_h,(I-\Pi)v_h\bigr)}_{S_{\rm stab}} .
-\label{eq:vem-split}
-\end{equation}
-
-\subsection{投影算子}
-
-取缩放单项式基 $m_0=1$，$m_{k+1}=x_k-x_{K,k}$（$x_K$ 为单元形心）。
-投影 $\Pi^{\nabla}:V_h(K)\to\mathcal{P}_1(K)$ 满足
-
-\begin{equation}
-\int_K\nabla\Pi^{\nabla}v\cdot\nabla q\dif x
-=\int_K\nabla v\cdot\nabla q\dif x
-=-\int_K v\,\Delta q\dif x+\int_{\partial K}v\,(\nabla q\cdot n)\dif s
-=\int_{\partial K}v\,(\nabla q\cdot n)\dif s ,
+(\nabla\Pi_k^\nabla v,\nabla q)_K
+=-(v,\Delta q)_K+\sum_{F\subset\partial K}(v,\partial_n q)_F,
+\qquad q\in\mathcal P_k(K).
 \label{eq:vem-proj}
 \end{equation}
-
-最后一步用到 $\Delta q=0$（$q$ 是一次多项式）。
-由于 $v|_e$ 在每条边上是一次函数，
-$\int_e v\,(\nabla q\cdot n)\dif s$ 用\textbf{梯形法则即精确}：
+$\Delta q$ 次数不超过 $k-2$，由内部矩计算；边界项由子实体的投影计算。
+边的 $k+1$ 个点值唯一确定 $k$ 次多项式迹：
 
 \begin{equation}
-\int_e v\,(\nabla q\cdot n)\dif s
-=\frac{|e|}{2}\Bigl(v(a)(\nabla q\cdot n)+v(b)(\nabla q\cdot n)\Bigr).
+v|_e=\sum_{i=0}^{k}v(x_i)\ell_i,\qquad
+\int_e v\,\partial_nq=\sum_{i=0}^{k}v(x_i)\int_e\ell_i\,\partial_nq.
 \label{eq:vem-edge}
 \end{equation}
-
-写成矩阵形式：设 $G=[\nabla m_0,\dots,\nabla m_d]\in\mathbb{R}^{d\times(d+1)}$，
-$M=|K|\,G^{\top}G$，$R_{\alpha i}=\int_{\partial K}\varphi_i(\nabla m_\alpha\cdot n)\dif s$，
-则
-
 \begin{equation}
-\Pi=\text{pinv}(M)\,R\in\mathbb{R}^{(d+1)\times n}.
-\label{eq:vem-Pi}
-\end{equation}
-
-\begin{caution}
-常函数模式的规范化至关重要。若取 $\Pi_{0i}=1/n$（顶点值的算术平均），
-则只有当单元"顶点算术平均 $=$ 形心"时（三角形、正方形成立，
-一般多边形不成立）投影才精确再生一次多项式。
-正确的规范化由
-$\ p(x_K)=\overline{d}-\nabla p\cdot(\overline{X}-x_K)$ 给出：
-
-\begin{equation}
-\Pi_{0\cdot}=\frac{1}{n}\mathbf{1}^{\top}
--(\overline{X}-x_K)\,\Pi_{1:d,\cdot},
-\qquad \overline{X}=\frac{1}{n}\sum_i X_i .
+\begin{cases}
+\displaystyle\int_K\Pi_k^\nabla v=\int_Kv,& k\ge2,\\
+\displaystyle\frac1{n_v}\sum_i(\Pi_1^\nabla v)(X_i)
+=\frac1{n_v}\sum_i v(X_i),&k=1.
+\end{cases}
 \label{eq:vem-const}
 \end{equation}
-
-若忽略这一点，稳定化项会惩罚线性函数，相容性被破坏，
-在不规则多边形网格上 $L^2$ 收敛阶会从 2 掉到 0.5 以下。
-细节见第 \ref{sec:pitfall-vem} 节。
-\end{caution}
-
-\subsection{稳定化项}
-
-\mosica{} 默认采用\textbf{对称半正定}的稳定化
+最后一个条件固定梯度无法决定的常数。记 $D_{i\alpha}=\operatorname{dof}_i(m_\alpha)$、
+$H_{\alpha\beta}=(m_\alpha,m_\beta)_K$、$G_{\alpha\beta}=(\nabla m_\alpha,\nabla m_\beta)_K$。
+用均值条件替换 $G$ 的常数行，得到 $\widetilde G$ 及对应右端 $B$：
 
 \begin{equation}
-S_{\rm stab}=\sigma\,(I-\Pi_{\rm dof})^{\top}(I-\Pi_{\rm dof}),\qquad
-\Pi_{\rm dof}=D\,\Pi,\quad
-D_{i\cdot}=[1,\ X_i-x_K],
+P_\nabla=\operatorname{solve}(\widetilde G,B),\qquad
+\Pi_k^\nabla v=\sum_\alpha(P_\nabla\mathbf v)_\alpha m_\alpha.
+\label{eq:vem-pi}
+\end{equation}
+这是线性方程求解，不是旧版伪逆或线性最小二乘重构。
+应检查 $P_\nabla D=I$，即再生整个 $\mathcal P_k$。
+
+\subsection{$L^2$ 投影、刚度、质量与载荷}
+先取 $C=HP_\nabla$，再把 $|\alpha|\le k-2$ 的行替换为真实矩对应的
+$|K|$ 倍自由度选择行；高阶行保留增强约束给出的值。于是 $P_0=\operatorname{solve}(H,C)$。
+
+\begin{equation}
+A_K=P_\nabla^TGP_\nabla+S_K,
+\label{eq:vem-split}
+\end{equation}
+\begin{equation}
+R_\nabla=I-DP_\nabla,\qquad S_K=\sigma R_\nabla^TR_\nabla,
 \label{eq:vem-stab}
 \end{equation}
-
-其中缩放因子取
-
 \begin{equation}
-\sigma=\frac{\operatorname{tr}(A_{\rm proj})}{\operatorname{tr}\bigl((I-\Pi_{\rm dof})^{\top}(I-\Pi_{\rm dof})\bigr)}
+\sigma=\frac{\operatorname{tr}(P_\nabla^TGP_\nabla)}
+{\max(\operatorname{tr}(R_\nabla^TR_\nabla),10^{-30})}.
 \label{eq:vem-sigma}
 \end{equation}
-
-使两部分量级相当（也自动对齐量纲）。
-传 \code{stabilization="legacy"} 可以复现早期脚本中
-$(I-\Pi_{\rm dof})/n$ 的形式（非对称，不推荐）；
-\code{stabilization="none"} 只用于诊断，因为纯投影项是奇异的。
-
-\subsection{载荷向量与质量矩阵}
-
-虚拟基函数没有显式表达式，因此 $\int_K f\varphi_i$ 需要用\textbf{扇形三角剖分
-（3D 为四面体剖分）上的分片线性插值}近似。把单元从形心剖成
-$T_1,\dots,T_n$，每个 $T_i$ 的三个角分别为形心 $c$ 与 $V_i,V_{i+1}$，
-其重心坐标为 $L_0,L_1,L_2$，则
-
 \begin{equation}
-\int_K f\varphi_j\dif x
-\approx c_0[j]\sum_i\int_{T_i} f L_0\dif x
-+\int_{T_j}f L_1\dif x
-+\int_{T_{j-1}}f L_2\dif x,
+\begin{split}
+M_K&=P_0^THP_0+|K|(I-DP_0)^T(I-DP_0),\\
+b_K&=P_0^T\mathbf f_K,\qquad
+(\mathbf f_K)_\alpha=\int_K f m_\alpha.
+\end{split}
 \label{eq:vem-load}
 \end{equation}
+默认 \code{trace} 稳定化对称半正定；\code{legacy} 现在是它的兼容别名。
+当投影残差范数小于 $10^{-10}$ 时不加稳定化。\code{none} 只返回一致性项，
+一般不能控制投影核，仅用于诊断。代码核心对应如下：
 
-其中 $c_0[j]$ 是基函数 $\varphi_j$ 在形心处的插值
-（取线性最小二乘重构的值，既保证线性再生又保证单位分解）。
-对三角形网格该公式是精确的；对一般多边形它保留了正确的几何权重。
+\begin{lstlisting}[language=MosicaFE,caption={局部投影与稳定化的核心计算}]
+energy = np.linalg.solve(system, rhs)
+moments = H @ energy
+for j in range(len(self.low)):
+    moments[j] = 0.0
+    moments[j, self.moment_start+j] = self.measure
+l2 = np.linalg.solve(H, moments)
+consistent = energy.T @ G @ energy
+residual = np.eye(len(self.dofs)) - D @ energy
+stable = residual.T @ residual
+scale = np.trace(consistent) / max(np.trace(stable), 1e-30)
+\end{lstlisting}
 
-\begin{caution}
-早期脚本对所有顶点统一用 $|K|/n$ 作为 $\int_K\varphi_i$。
-在四边形和三角形上这个近似恰好足够好，但在不规则多边形上
-会严重高估"短边"上的顶点，导致收敛停滞。这是我们把载荷与质量矩阵
-改为公式 \eqref{eq:vem-load} 的直接原因。
-\end{caution}
+默认求积参数为 $2k+2$，高阶时采用动态 Gauss/Duffy 求积。
+多边形分三角形、多面体分四面体仅用于积分，不引入有限元子网格未知量。
+\code{VEMSpace} 沿用 \code{BaseFESpace} 组装；Dirichlet 条件同时设置边界点值及
+边界面的归一化矩，不能把矩自由度当作某个坐标处的函数值。
 
 \section{RT0$\times$P0 混合离散}
 
@@ -627,6 +649,7 @@ p=0\ \text{ on }\partial\Omega .
 \centering
 \caption{RT0$\times$P0 的自由度和边界条件}
 \label{tab:rt0}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lll@{}}
 \toprule
 量 & 自由度位置 & 个数 \\
@@ -637,6 +660,10 @@ p=0\ \text{ on }\partial\Omega .
 Dirichlet 条件 $p=0$ & \multicolumn{2}{l}{混合格式的\textbf{自然}边界条件，无需消去} \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \section{误差估计}
@@ -659,7 +686,7 @@ $\|u-u_h\|_V\le C\inf_{v_h\in V_h}\|u-v_h\|_V$。
 \begin{itemize}[itemsep=0.15em]
   \item P1（三角形）：$L^2$ 为 $O(h^2)$，$H^1$ 为 $O(h)$；
   \item P2 / Q2：$L^2$ 为 $O(h^3)$，$H^1$ 为 $O(h^2)$；
-  \item VEM（$k=1$，任意多边形）：$L^2$ 为 $O(h^2)$，$H^1$ 为 $O(h)$；
+  \item VEM（任意 $k\ge1$，合格多边形/多面体）：在正则性及稳定性条件下，$L^2$ 为 $O(h^{k+1})$，$H^1$ 为 $O(h^k)$；
   \item RT0$\times$P0：压力 $L^2$ 为 $O(h)$，通量 $L^2$ 为 $O(h)$。
 \end{itemize}
 第 \ref{chap:error} 章给出实测数据。
@@ -679,46 +706,81 @@ $\|u-u_h\|_V\le C\inf_{v_h\in V_h}\|u-v_h\|_V$。
 \centering
 \caption{\code{Mesh} 的主要属性}
 \label{tab:mesh-attrs}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{2.8cm}L{1.9cm}L{9.9cm}@{}}
 \toprule
 属性 & 类型 & 含义 \\
 \midrule
-\code{nodes} & \code{(n\_nodes, dim)} 数组 & 顶点坐标 \\
-\code{elements} & \code{list[ndarray]} & 每个单元的顶点编号，\textbf{变长} \\
-\code{element\_type} & \code{str} & \code{interval}/\code{triangle}/\code{quad}/\code{tet}/\code{hex}/\code{polygon}/\code{polyhedron} \\
-\code{boundary\_nodes} & \code{ndarray} & 边界顶点编号（由 facet 拓扑自动判定） \\
+\code{nodes} & \code{(n\_\allowbreak nodes,\allowbreak  dim)} 数组 & 顶点坐标 \\
+\code{elements} & \code{list[}\allowbreak\code{ndarray]} & 每个单元的顶点编号，\textbf{变长} \\
+\code{element\_\allowbreak type} & \code{str} & \code{interval}/\allowbreak\code{triangle}/\allowbreak\code{quad}/\allowbreak\code{tet}/\allowbreak\code{hex}/\allowbreak\code{polygon}/\allowbreak\code{polyhedron} \\
+\code{boundary\_\allowbreak nodes} & \code{ndarray} & 边界顶点编号（由 facet 拓扑自动判定） \\
 \code{dim} & \code{int} & 空间维数 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{important}
 \code{elements} 故意设计成\textbf{变长列表}：三角形、四边形、五边形、
 Voronoi 多边形、四面体、六面体因此可以共用同一套组装循环。
-如果所有单元顶点数相同，可以通过 \code{mesh.uniform\_vertices}
-取出 \code{(n\_cells, k)} 的数组视图。
+如果所有单元顶点数相同，可以通过 \code{mesh.uniform\_\allowbreak vertices}
+取出 \code{(n\_\allowbreak cells,\allowbreak  k)} 的数组视图。
 \end{important}
+
+\subsection{VEM 网格通用性与加密}
+\label{sec:vem-mesh-general}
+\code{elements} 的变长连接表允许不同顶点数的单元共存。
+三维面表有公共模板和逐单元面表两种格式（见下方代码），其中顶点号均为单元内的局部编号。
+显式面表优先于按顶点数推断；例如 8 个顶点也可能组成七棱锥，不能直接当六面体。
+\code{mesh.get\_\allowbreak cell\_\allowbreak faces(c)} 返回该单元的真实面表。
+
+\begin{lstlisting}[language=MosicaFE,caption={二维与三维多边形网格入口}]
+mesh2 = Mesh.voronoi_polygon(n_points=1024, seed=42)
+mesh3 = Mesh.voronoi_polyhedron(n_points=192, seed=42)
+# Common template: faces[face][vertex].
+# Per-cell faces: faces[cell][face][vertex].
+# mesh3 = Mesh(nodes, elements, element_type="polyhedron", faces=faces)
+\end{lstlisting}
+
+\textbf{当前几何条件：}二维单元和三维面为直边、平面多边形；各自的顶点均值
+必须严格位于星形核内。三维体单元也须满足此星形条件，表面必须闭合、连通且可定向，
+每条表面边恰接两个面。允许满足条件的凹单元。相邻单元共享面需具有相同的全局顶点和边界环，
+一个面最多属于两个单元。程序按边邻接统一局部面方向，以有符号体积确定外向。
+不支持带洞实体、曲边、非平面面，也不会自动修复裂缝、重叠或悬挂节点。
+
+二维 Voronoi 用 8 个方向的镜像点封闭边界，三维用 26 组镜像点生成多面体，
+三维生成器由 \path{core/polyhedral.py} 实现，依赖 SciPy。
+体积与积分按真实面表的扇形四面体计算。
+
+结构化网格使用 \code{refine\_\allowbreak uniform()} 将各方向区间数加倍。
+Voronoi 加密则提高 \code{n\_\allowbreak points} 并重新生成网格；同一个随机种子也不构成嵌套细化，
+没有父子单元关系或解转移。当前没有局部自适应加密。
+\code{get\_\allowbreak mesh\_\allowbreak size()} 返回最大单元直径，不能把 $N^{-1/d}$ 当作其精确值。
 
 \subsection{facet 拓扑}
 
 余维 1 的单元面（facet）是边界判定的基础：
-1D 的 facet 是端点、2D 是边、3D 是三角形或四边形面。
+1D 的 facet 是端点、2D 是边、3D 是平面多边形面。
 \code{mesh.facets} 给出全部 facet，
-\code{mesh.boundary\_facets} 给出只被一个单元拥有的 facet，
+\code{mesh.boundary\_\allowbreak facets} 给出只被一个单元拥有的 facet，
 它们的顶点集合就是 Dirichlet 边界所在的位置。
 
 \begin{property}
 对二维任意多边形网格，facet 就是多边形的边；
 对六面体网格按固定的 6 个面表展开；
-对一般三维多面体，可以通过 \code{Mesh(..., faces=...)} 显式提供面表。
+对一般三维多面体，可以通过 \code{Mesh(...,\allowbreak  faces=...)} 显式提供面表。
 \end{property}
 
 \begin{caution}
 上面这套 \code{mesh.facets} 是"\textbf{边界判定}用的顶点集合"，
-它足以支撑 Lagrange 与虚拟元（自由度在顶点上）。
+高阶 VEM 还需共享边点与面矩，边界条件由 \code{VEMSpace.boundary\_\allowbreak dofs} 和 \code{boundary\_\allowbreak values} 统一处理。
 但对 $H(\mathrm{div})$ 协调的混合元（RT0）来说，还额外需要
 "\textbf{哪些单元共享同一个面}"以及"这个面的全局法向指向谁"，
-因此本库另有一层面拓扑：\code{core/facets.py}。下一小节给出它的用法。
+因此本库另有一层面拓扑：\path{core/facets.py}。下一小节给出它的用法。
 \end{caution}
 
 \subsection{面拓扑与定向：\code{core/facets.py}}
@@ -727,24 +789,29 @@ Voronoi 多边形、四面体、六面体因此可以共用同一套组装循环
 RT0 的自由度是\textbf{面法向通量}
 $\Phi_f=\int_f q\cdot n_f\dif s$，相邻两个单元必须共享同一个未知量。
 这要求显式地给出面的全局编号与定向。本库把它做成 \code{core} 层的一等公民
-\code{FacetTopology}（\code{mesh.facet\_topology} 惰性构建并缓存）：
+\code{FacetTopology}（\code{mesh.facet\_\allowbreak topology} 惰性构建并缓存）：
 
 \begin{table}[htbp]
 \centering
 \caption{\code{FacetTopology} 的主要属性（\code{t = mesh.facet\_topology}）}
 \label{tab:facettopo}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{4.4cm}L{10.0cm}@{}}
 \toprule
 属性 / 方法 & 含义 \\
 \midrule
-\code{t.facets} & \code{(n\_facets, d)}：每个面的\textbf{升序}顶点表（全局唯一键） \\
-\code{t.cell\_facets} & \code{(n\_cells, d+1)}：\code{[c,i]} 是单元 $c$ 第 $i$ 个局部面的全局编号 \\
+\code{t.facets} & \code{(n\_\allowbreak facets,\allowbreak  d)}：每个面的\textbf{升序}顶点表（全局唯一键） \\
+\code{t.cell\_\allowbreak facets} & \code{(n\_\allowbreak cells,\allowbreak  d+1)}：\code{[c,\allowbreak i]} 是单元 $c$ 第 $i$ 个局部面的全局编号 \\
 \code{t.signs} & $\pm1$：全局法向是否指向该单元外部 \\
 \code{t.normals} & 未归一化的全局法向（模长 = 面测度） \\
 \code{t.counts} & 相邻单元个数：内部面 2、边界面 1 \\
-\code{t.boundary\_facets()} & 边界面编号数组（\code{t.n\_boundary} 为个数） \\
+\code{t.boundary\_\allowbreak facets()} & 边界面编号数组（\code{t.n\_\allowbreak boundary} 为个数） \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{lstlisting}[language=MosicaFE,caption={示例 4.2：面拓扑与定向}]
@@ -764,7 +831,7 @@ print(t.signs[c0][list(t.cell_facets[c0]).index(0)] *
 \end{lstlisting}
 
 \begin{important}
-\code{build\_facet\_topology} 会拒绝两类"会静默算错"的输入：
+\code{build\_\allowbreak facet\_\allowbreak topology} 会拒绝两类"会静默算错"的输入：
 非单纯形网格（四边形 / 多边形 / 六面体），
 以及存在被 3 个以上单元共用的面（不协调剖分）。
 这是 RT0 只接受三角形 / 四面体网格的技术原因。
@@ -799,24 +866,30 @@ for m in (m1, m2, m3, m4, m5, m7, m8):
 \centering
 \caption{网格工厂速查}
 \label{tab:mesh-factories}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{6.4cm}L{1.9cm}L{6.3cm}@{}}
 \toprule
 工厂 & 区域 & 单元 \\
 \midrule
-\code{Mesh.interval(a,b,nx)} & $[a,b]$ & 线段 \\
-\code{Mesh.rectangle(...,"triangle")} & 矩形 & 三角形 \\
-\code{Mesh.rectangle(...,"quad")} & 矩形 & 四边形 \\
-\code{Mesh.box(...,"tet")} & 长方体 & 四面体 \\
-\code{Mesh.box(...,"hex")} & 长方体 & 六面体 \\
-\code{Mesh.pentagon(nx,ny)} & 单位正方形 & 五边形 \\
-\code{Mesh.voronoi\_polygon(...)} & 单位正方形 & Voronoi 多边形 \\
-\code{Mesh.from\_arrays(...)} & 自定义 & 自动推断 \\
+\code{Mesh.interval(a,\allowbreak b,\allowbreak nx)} & $[a,b]$ & 线段 \\
+\code{Mesh.rectangle(...,\allowbreak "triangle")} & 矩形 & 三角形 \\
+\code{Mesh.rectangle(...,\allowbreak "quad")} & 矩形 & 四边形 \\
+\code{Mesh.box(...,\allowbreak "tet")} & 长方体 & 四面体 \\
+\code{Mesh.box(...,\allowbreak "hex")} & 长方体 & 六面体 \\
+\code{Mesh.pentagon(nx,\allowbreak ny)} & 单位正方形 & 五边形 \\
+\code{Mesh.voronoi\_\allowbreak polygon(...)} & 单位正方形 & Voronoi 多边形 \\
+\code{Mesh.voronoi\_\allowbreak polyhedron(...)} & 单位立方体 & Voronoi 多面体 \\
+\code{Mesh.from\_\allowbreak arrays(...)} & 自定义 & 自动推断 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{remark}[Kuhn 剖分]
-\code{Mesh.box(...,element\_type="tet")} 默认把每个小立方体剖成 6 个
+\code{Mesh.box(...,\allowbreak element\_\allowbreak type="tet")} 默认把每个小立方体剖成 6 个
 \textbf{共享主对角线}的四面体（Kuhn 剖分）。这样相邻立方体在公共面上的
 三角剖分方向一致，网格是协调的。\code{pattern="center"} 则额外插入
 立方体中心点，剖成 12 个四面体——与原始 VEM 三维脚本中的网格一致。
@@ -852,7 +925,7 @@ fine = coarse.refine_uniform()
 print(coarse.n_cells, fine.n_cells)     # 32 128
 \end{lstlisting}
 
-\code{refine\_uniform()} 只对结构化网格（\code{interval} /
+\code{refine\_\allowbreak uniform()} 只对结构化网格（\code{interval} /
 \code{rectangle} / \code{box} / \code{pentagon}）有效：
 它把各方向的网格数翻倍后重新生成，因此三角形网格的单元数变为 4 倍、
 六面体网格变为 8 倍。对 Voronoi 这类非结构网格会抛出 \code{ValueError}。
@@ -863,6 +936,7 @@ print(coarse.n_cells, fine.n_cells)     # 32 128
 \centering
 \caption{参考单元约定}
 \label{tab:refelem}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}ll@{}}
 \toprule
 单元类型 & 参考单元 \\
@@ -874,6 +948,10 @@ print(coarse.n_cells, fine.n_cells)     # 32 128
 \code{hex} & $[0,1]^3$，先 $z=0$ 面逆时针 4 点，再 $z=1$ 面对应 4 点 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 单纯形使用仿射映射 $x=v_0+J_K\hat x$；
@@ -895,7 +973,7 @@ print(apply_affine_map([[0.5,0.5]], quad))   # [[1, 1]]
 \end{lstlisting}
 
 \begin{caution}
-\textbf{雅可比的约定。}\code{compute\_jacobian} 对两类单元返回\textbf{同一个约定}的雅可比：
+\textbf{雅可比的约定。}\code{compute\_\allowbreak jacobian} 对两类单元返回\textbf{同一个约定}的雅可比：
 列是物理坐标对参考坐标的偏导，
 
 \begin{equation}
@@ -905,13 +983,13 @@ J=\big[\ \partial x/\partial\xi_1\ \ \cdots\ \ \partial x/\partial\xi_d\ \big],
 \label{eq:jac-convention}
 \end{equation}
 
-只有这样，梯度变换 \code{transform\_gradient(dN, J)}（内部用 $J^{-\top}$）
+只有这样，梯度变换 \code{transform\_\allowbreak gradient(dN,\allowbreak  J)}（内部用 $J^{-\top}$）
 与四边形 / 六面体的 Newton 逆映射（内部用 $J^{-1}$）才是对的。
 \textbf{自己扩展代码时不要写成 $dN^{\top}V$}——那是转置雅可比。
 对轴对齐的矩形 / 长方体，$J$ 是对角阵、转置不变，这个错误会被完全掩盖；
 而网格一旦\textbf{旋转或畸变}（$J\ne J^{\top}$），梯度、刚度矩阵与插值
 就会静默算错。本库在 2026-09-21 修掉过这一处（第 7 号 bug），
-回归测试见 \code{tests/test\_tensor\_geometry.py}：它用有限差分核对 $J$，
+回归测试见 \path{tests/test_tensor_geometry.py}：它用有限差分核对 $J$，
 并检验旋转 $0^\circ/15^\circ/30^\circ/45^\circ$ 时误差逐位相同。
 \end{caution}
 
@@ -937,6 +1015,7 @@ print(w.sum(), mesh.get_cell_measure(0))
 \centering
 \caption{可用的求积规则（\code{order} 为需精确积分的多项式次数）}
 \label{tab:quad}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}lll@{}}
 \toprule
 单元 & 规则 & 说明 \\
@@ -948,13 +1027,17 @@ print(w.sum(), mesh.get_cell_measure(0))
 \code{hex} & 张量 Gauss & 每个方向 $n$ 点 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{caution}
 张量积单元的求积阶需要按\textbf{每个方向}的次数来理解。
 \code{Q1} 单元刚度矩阵的被积函数在每个方向上是 2 次，
 所以每个方向至少需要 2 个 Gauss 点——\mosica{} 内部会自动把
-阶数取成 \code{max(2, 2*p)}，用户一般不必手工指定。
+阶数取成 \code{max(2,\allowbreak  2*p)}，用户一般不必手工指定。
 早期版本在这里少取了一个点，导致三维六面体的收敛阶算出来是负数。
 \end{caution}
 
@@ -970,23 +1053,28 @@ print(w.sum(), mesh.get_cell_measure(0))
 \centering
 \caption{\code{BaseFESpace} 的关键方法}
 \label{tab:space-api}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{6.2cm}L{9.2cm}@{}}
 \toprule
 方法 & 含义 \\
 \midrule
-\code{stiffness\_matrix()} & $A_{ij}=\int\nabla\varphi_j\cdot\nabla\varphi_i$ \\
-\code{mass\_matrix()} & $M_{ij}=\int\varphi_j\varphi_i$ \\
-\code{load\_vector(f)} & $b_i=\int f\varphi_i$ \\
-\code{boundary\_dofs()} & Dirichlet 自由度编号 \\
+\code{stiffness\_\allowbreak matrix()} & $A_{ij}=\int\nabla\varphi_j\cdot\nabla\varphi_i$ \\
+\code{mass\_\allowbreak matrix()} & $M_{ij}=\int\varphi_j\varphi_i$ \\
+\code{load\_\allowbreak vector(f)} & $b_i=\int f\varphi_i$ \\
+\code{boundary\_\allowbreak dofs()} & Dirichlet 自由度编号 \\
 \code{interpolate(f)} & 把函数插值到自由度上 \\
-\code{evaluate(cell,u,pts)} & 在单元内把自由度重构成函数并求值 \\
-\code{evaluate\_gradient(cell,u,pts)} & 同上，返回梯度 \\
-\code{nodal\_values(u)} & 把自由度向量还原到网格节点（可视化用） \\
-\code{get\_cell\_dofs(i)} & 第 $i$ 个单元的全局自由度编号 \\
-\code{get\_dof\_coordinates(k)} & 第 $k$ 个自由度的物理坐标 \\
-\code{eval\_basis(xi)} / \code{eval\_basis\_grad(xi)} & 参考单元上的基函数（仅显式基函数空间） \\
+\code{evaluate(cell,\allowbreak u,\allowbreak pts)} & 在单元内把自由度重构成函数并求值 \\
+\code{evaluate\_\allowbreak gradient(cell,\allowbreak u,\allowbreak pts)} & 同上，返回梯度 \\
+\code{nodal\_\allowbreak values(u)} & 把自由度向量还原到网格节点（可视化用） \\
+\code{get\_\allowbreak cell\_\allowbreak dofs(i)} & 第 $i$ 个单元的全局自由度编号 \\
+\code{get\_\allowbreak dof\_\allowbreak coordinates(k)} & 第 $k$ 个自由度的物理坐标 \\
+\code{eval\_\allowbreak basis(xi)} / \code{eval\_\allowbreak basis\_\allowbreak grad(xi)} & 参考单元上的基函数（仅显式基函数空间） \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{important}
@@ -1064,48 +1152,53 @@ print(V2.boundary_dofs()[:6])
 
 \section{虚拟元空间}
 
-\begin{lstlisting}[language=MosicaFE,caption={示例 5.2：虚拟元空间（任意多边形）}]
+\begin{lstlisting}[language=MosicaFE,caption={任意阶 VEM 空间及常函数检查}]
+import numpy as np
 from MosicaFE import Mesh, FESpace
 
-mesh = Mesh.voronoi_polygon(n_points=100, seed=0)
-V = FESpace.vem(mesh)                       # k = 1, vertex DOFs only
-
-print(V.n_dofs, mesh.n_nodes)               # equal
-K = V.stiffness_matrix()                    # projection + stabilization
+mesh = Mesh.voronoi_polygon(n_points=100, seed=42)
+k = 3
+V = FESpace.vem(mesh, degree=k)
+# Equivalent: FESpace.create(mesh, family="vem", degree=k)
+print(V.n_dofs, mesh.n_nodes)
+A = V.stiffness_matrix()
 M = V.mass_matrix()
 b = V.load_vector(lambda x: 1.0)
-
-print("row sums of M equal b?",
-      abs(b - M.sum(axis=1)).max() < 1e-12)
+one = V.interpolate(lambda x: 1.0)
+print(np.max(np.abs(M @ one - b)))
 \end{lstlisting}
 
+\code{degree} 必须为正整数，默认是 1；也可写 \code{element="VEM3"}。
+$k\ge2$ 时，\code{u} 包含积分矩，因此通常 \code{V.n\_\allowbreak dofs > mesh.n\_\allowbreak nodes}。
+\code{V.interpolate} 计算函数的全部自由度；常函数的矩自由度不全为 1，
+不能用质量矩阵行和检查高阶一致性，应检查上面的 $M\mathbf 1_{\rm dof}=b$。
+\code{V.nodal\_\allowbreak values(u)} 返回实际顶点值，适合报告节点解的范围。
+
 \begin{property}
-\code{VEMSpace} 的刚度矩阵满足
-\begin{enumerate}[label=(\arabic*),itemsep=0.1em]
-  \item 对称（因为稳定化项写成 Gram 矩阵的形式）；
-  \item 半正定，核空间中包含常函数；
-  \item 一次多项式被精确再生（单元矩阵作用在任意线性自由度向量上，
-        给出的能量等于 $\int_K|\nabla p|^2$）。
-\end{enumerate}
-第 (3) 条就是"patch test"，第 \ref{sec:pitfall-vem} 节会说明它有多重要。
+在合格网格及足够求积精度下，默认局部刚度对称半正定，常函数在核中，
+并对整个 $\mathcal P_k$ 满足多项式一致性。施加适当 Dirichlet 条件后，
+可使用直接法或对称正定系统适用的迭代法。当前测试覆盖到 $k=5$ 的多项式一致性；
+没有人为阶数上限，但高阶单项式矩阵的条件数会增大，不等于任意高阶都已验证。
 \end{property}
 
 \begin{table}[htbp]
 \centering
-\caption{\code{VEMSpace} 的 \code{stabilization} 选项}
+\caption{稳定化选项}
 \label{tab:stab}
-\begin{tabular}{@{}lp{8.6cm}@{}}
+\begin{lrbox}{\guideTableBox}
+\begin{tabular}{@{}lp{9cm}@{}}
 \toprule
 取值 & 含义 \\
 \midrule
-\code{"trace"}（默认） & $\sigma(I-\Pi_{\rm dof})^{\top}(I-\Pi_{\rm dof})$，
-对称半正定，$\sigma$ 由迹比确定。推荐使用 \\
-\code{"legacy"} & 早期脚本的 $(I-\Pi_{\rm dof})/n$，非对称，
-在不规则多边形上会发散，仅用于复现旧结果 \\
-\code{"none"} & 只用投影项 $A_{\rm proj}$。单元矩阵是奇异的，
-仅用于诊断，不要用于求解 \\
+\code{"trace"} & 默认；迹比缩放的对称稳定化 \\
+\code{"legacy"} & 兼容别名，与 trace 相同 \\
+\code{"none"} & 只保留投影项，仅诊断使用 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \section{RT0$\times$P0 混合空间}
@@ -1131,20 +1224,25 @@ RT0 空间与 \code{LagrangeSpace} / \code{VEMSpace} 的接口是\textbf{平行}
 \centering
 \caption{RT0$\times$P0 的矩阵原语（供物理层组合）}
 \label{tab:rt0-blocks}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{5.4cm}L{2.9cm}L{6.1cm}@{}}
 \toprule
 方法 & 形状 & 含义 \\
 \midrule
-\code{V.flux\_mass\_matrix()} & $(\Phi,\Phi)$ & $M_{ij}=\int_K\varphi_i\cdot\varphi_j$，\textbf{精确闭式}，无需求积 \\
-\code{V.divergence\_matrix()} & $(P,\Phi)$ & $B_{K,i}=\int_K\nabla\cdot\varphi_i=\sigma_{K,i}$，恒为 $\pm1$ \\
-\code{V.pressure\_load\_vector(f)} & $(P,)$ & $\int_K f$ \\
+\code{V.flux\_\allowbreak mass\_\allowbreak matrix()} & $(\Phi,\Phi)$ & $M_{ij}=\int_K\varphi_i\cdot\varphi_j$，\textbf{精确闭式}，无需求积 \\
+\code{V.divergence\_\allowbreak matrix()} & $(P,\Phi)$ & $B_{K,i}=\int_K\nabla\cdot\varphi_i=\sigma_{K,i}$，恒为 $\pm1$ \\
+\code{V.pressure\_\allowbreak load\_\allowbreak vector(f)} & $(P,)$ & $\int_K f$ \\
 \midrule
-\code{V.interpolate\_pressure(f)} & $(P,)$ & $f$ 的单元平均（$L^2$ 投影到 P0） \\
-\code{V.interpolate\_flux(q)} & $(\Phi,)$ & $\Phi_f=\int_f q\cdot n_f\dif s$ \\
-\code{V.evaluate\_flux(c,Q,pts)} & $(n_q,d)$ & 单元内重构 $q_h=\sum_i F_i\varphi_i$ \\
-\code{V.locate\_cell(x)} & int & 用重心坐标定位点所在单元 \\
+\code{V.interpolate\_\allowbreak pressure(f)} & $(P,)$ & $f$ 的单元平均（$L^2$ 投影到 P0） \\
+\code{V.interpolate\_\allowbreak flux(q)} & $(\Phi,)$ & $\Phi_f=\int_f q\cdot n_f\dif s$ \\
+\code{V.evaluate\_\allowbreak flux(c,\allowbreak Q,\allowbreak pts)} & $(n_q,d)$ & 单元内重构 $q_h=\sum_i F_i\varphi_i$ \\
+\code{V.locate\_\allowbreak cell(x)} & int & 用重心坐标定位点所在单元 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{lstlisting}[language=MosicaFE,caption={示例 5.4：直接使用两个块}]
@@ -1162,12 +1260,12 @@ A = bmat([[M, -B.T], [B, None]])  # [[M, -B^T], [B, 0]]
 \end{lstlisting}
 
 \begin{caution}
-RT0 空间\textbf{不提供} \code{stiffness\_matrix()} / \code{mass\_matrix()} /
-\code{load\_vector()}，也不提供 \code{interpolate()}：它对应的是鞍点问题，
+RT0 空间\textbf{不提供} \code{stiffness\_\allowbreak matrix()} / \code{mass\_\allowbreak matrix()} /
+\code{load\_\allowbreak vector()}，也不提供 \code{interpolate()}：它对应的是鞍点问题，
 而且同时携带两个场，没有"单一算子 / 单一插值"可言。
 调用这些方法会抛出 \code{NotImplementedError}，并在消息里指出该用哪个方法
-（例如 \code{mass\_matrix()} $\to$ \code{flux\_mass\_matrix()}，
-\code{load\_vector()} $\to$ \code{pressure\_load\_vector()}）。
+（例如 \code{mass\_\allowbreak matrix()} $\to$ \code{flux\_\allowbreak mass\_\allowbreak matrix()}，
+\code{load\_\allowbreak vector()} $\to$ \code{pressure\_\allowbreak load\_\allowbreak vector()}）。
 日常使用请直接配合 \code{MixedPoissonProblem}。
 \end{caution}
 
@@ -1179,28 +1277,33 @@ from MosicaFE import Mesh, FESpace
 mesh = Mesh.rectangle(nx=16, ny=16)
 
 V_fem = FESpace.lagrange(mesh, degree=2)    # P2
-V_vem = FESpace.vem(mesh, degree=1)         # VEM k=1
+V_vem = FESpace.vem(mesh, degree=3)         # VEM k=3
 V_rt0 = FESpace.rt0(mesh)                   # RT0 x P0
 
 # by name (used by solve_poisson(element=...))
 print(FESpace.available())
-V_any = FESpace.create(mesh, family="vem", degree=1)
+V_any = FESpace.create(mesh, family="vem", degree=3)
 \end{lstlisting}
 
 \begin{table}[htbp]
 \centering
 \caption{字符串形式的"元"名字（\code{solve\_poisson(element=...)} 使用）}
 \label{tab:elem-names}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{3.6cm}L{3.6cm}L{6.2cm}@{}}
 \toprule
 名字 & 空间族 & 可用网格 \\
 \midrule
 \code{"P1"} / \code{"P2"} & Lagrange & 三角形、四面体 \\
 \code{"Q1"} / \code{"Q2"} & Lagrange（张量积） & 四边形、六面体 \\
-\code{"VEM"} / \code{"VEM1"} & 虚拟元 $k=1$ & 任意多边形 / 多面体 \\
+\code{"VEM"} / \code{"VEM3"} & 虚拟元 $k\ge1$ & 合格多边形 / 多面体 \\
 \code{"RT0"} / \code{"RT0-P0"} / \code{"MIXED"} & RT0$\times$P0 & 三角形、四面体 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 % ===========================================================================
@@ -1288,7 +1391,7 @@ u(x)=1+2x_1-\tfrac12 x_2,\qquad f\equiv0,\qquad g=u|_{\partial\Omega},
 \subsection{其它边界条件}
 
 \begin{itemize}[itemsep=0.2em]
-  \item \textbf{Neumann 条件}：向 \code{load\_vector} 的结果中加入
+  \item \textbf{Neumann 条件}：向 \code{load\_\allowbreak vector} 的结果中加入
         $\int_{\Gamma_N}h\varphi_i\dif s$ 即可，需要边界 facet 的求积规则；
   \item \textbf{RT0 混合格式}：$p=0$ 是自然边界条件，
         无需消去任何自由度（这也是混合格式在流量问题上更"自然"的原因）；
@@ -1302,11 +1405,11 @@ u(x)=1+2x_1-\tfrac12 x_2,\qquad f\equiv0,\qquad g=u|_{\partial\Omega},
 \caption{全局组装（\mosica{} 的 \code{BaseFESpace.\_assemble}）}
 \label{alg:assembly}
 \begin{algorithmic}[1]
-\REQUIRE 空间 $V$、单元局部矩阵生成函数 \code{local\_matrix(cell)}
-\STATE 初始化三元组列表 \code{rows, cols, vals}
+\REQUIRE 空间 $V$、单元局部矩阵生成函数 \code{local\_\allowbreak matrix(cell)}
+\STATE 初始化三元组列表 \code{rows,\allowbreak  cols,\allowbreak  vals}
 \FOR{每个单元 $c=0,\dots,n_{\rm cells}-1$}
-    \STATE $\mathcal{D}_c\leftarrow$\code{get\_cell\_dofs(c)}
-    \STATE $K_c\leftarrow$\code{local\_matrix(c)}
+    \STATE $\mathcal{D}_c\leftarrow$\code{get\_\allowbreak cell\_\allowbreak dofs(c)}
+    \STATE $K_c\leftarrow$\code{local\_\allowbreak matrix(c)}
     \STATE 把 $\mathcal{D}_c$ 的行 / 列索引与 $K_c$ 展平后追加到三元组列表
 \ENDFOR
 \STATE 由 COO 三元组构造矩阵（重复下标自动求和）
@@ -1404,22 +1507,28 @@ u = problem.solve(method="auto")   # auto/direct/cg/gmres/bicgstab/minres
 \centering
 \caption{可用的 Krylov 求解器}
 \label{tab:krylov}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llp{6.4cm}@{}}
 \toprule
 方法 & 适用矩阵 & 备注 \\
 \midrule
-\code{conjugate\_gradient} & 对称正定 & 每步 $O(\mathrm{nnz})$，迭代数 $O(\sqrt{\kappa})$ \\
+\code{conjugate\_\allowbreak gradient} & 对称正定 & 每步 $O(\mathrm{nnz})$，迭代数 $O(\sqrt{\kappa})$ \\
 \code{gmres} & 一般（非对称） & 带重启，存储 $O(\text{restart}\times n)$ \\
 \code{bicgstab} & 一般 & 每步两次矩阵向量积，内存小 \\
 \code{minres} & 对称不定 & 例如 RT0 的鞍点系统 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{caution}
-共轭梯度法要求矩阵对称正定。虚拟元的刚度矩阵在默认稳定化下是对称的，
-但如果选了 \code{stabilization="legacy"}，矩阵不再对称，CG 会失效
-（甚至不报错地给出错误结果）。鞍点系统请用直接法或 MINRES。
+共轭梯度法要求施加边界条件后的矩阵对称正定。VEM 的 \code{trace} 与
+\code{legacy} 使用相同的对称稳定化；\code{none} 不能保证控制投影核。
+
+鞍点系统请用直接法或 MINRES。
 \end{caution}
 
 \section{求解器选择指南}
@@ -1428,6 +1537,7 @@ u = problem.solve(method="auto")   # auto/direct/cg/gmres/bicgstab/minres
 \centering
 \caption{求解器选择建议}
 \label{tab:solver-guide}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llll@{}}
 \toprule
 问题规模 & 矩阵类型 & 推荐求解器 & 备注 \\
@@ -1438,6 +1548,10 @@ $>2\times10^4$ & 对称不定 & MINRES 或直接法 & 鞍点问题 \\
 $>2\times10^4$ & 非对称 & GMRES / BiCGSTAB & 需要重启参数 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 \begin{lstlisting}[language=MosicaFE,caption={示例 7.2：自动选择}]
@@ -1484,9 +1598,11 @@ norms = problem.compute_errors(u, exact, exact_grad)
 \end{lstlisting}
 
 \begin{remark}
-虚拟元的基函数没有显式表达式，\code{VEMSpace.evaluate} 用的是
-"顶点自由度上的线性最小二乘重构"。该重构误差与 $u_h$ 本身同阶，
-因此实测收敛阶与 $u_h$ 的真实收敛阶一致（见第 \ref{sec:verify} 节）。
+虚拟元的 \code{evaluate} 使用 $\Pi_k^0u_h$，\code{evaluate\_\allowbreak gradient}
+使用 $\nabla\Pi_k^\nabla u_h$。因此报告的是可计算的投影误差；不能直接称为未知虚拟函数的精确误差。
+\code{H1} 表示梯度误差的半范数，\code{Linf} 是离散采样最大误差。
+高阶解向量包含矩自由度，不可直接对全部 \code{u} 取最大值作为函数最大值。
+
 \end{remark}
 
 \section{收敛性研究框架}
@@ -1521,16 +1637,20 @@ print(estimate_convergence_rate(h, errors["L2"], use_last=3))   # ~3.0
 \end{equation}
 
 更稳健的做法是对 $\log e$--$\log h$ 做最小二乘拟合
-（\code{estimate\_convergence\_rate(h, errors)} 就是这样实现的），
-并且可以用 \code{use\_last=k} 只取最后 $k$ 层以逼近渐近阶。
+（\code{estimate\_\allowbreak convergence\_\allowbreak rate(h,\allowbreak  errors)} 就是这样实现的），
+并且可以用 \code{use\_\allowbreak last=k} 只取最后 $k$ 层以逼近渐近阶。
 
 \section{实测验证结果}
 \label{sec:verify}
+
+下表保留 FEM/RT0 的既有验证记录。新版任意阶 VEM 的可追溯结果见第 \ref{sec:vem-fine-results} 节。
+
 
 \begin{table}[htbp]
 \centering
 \caption{各方法的实测收敛阶（制造解，网格逐次加密）}
 \label{tab:verify}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}llccc@{}}
 \toprule
 元 & 网格 & 实测 $L^2$ & 实测 $H^1$ & 理论 $(L^2/H^1)$ \\
@@ -1539,17 +1659,16 @@ P1 & 三角形 & 1.98 & 0.99 & 2 / 1 \\
 P2 & 三角形 & 3.00 & 1.99 & 3 / 2 \\
 Q1 & 四边形 & 2.00 & 1.00 & 2 / 1 \\
 Q2 & 四边形 & 3.00 & 2.00 & 3 / 2 \\
-VEM $k=1$ & 三角形 & 1.98 & 0.99 & 2 / 1 \\
-VEM $k=1$ & 四边形 & 1.99 & 1.00 & 2 / 1 \\
-VEM $k=1$ & 五边形 & 2.00 & 1.00 & 2 / 1 \\
-VEM $k=1$ & Voronoi 多边形 & 1.97 & 1.01 & 2 / 1 \\
 P1 & 四面体 & 1.95 & 0.98 & 2 / 1 \\
 Q1 & 六面体 & 2.01 & 1.00 & 2 / 1 \\
-VEM $k=1$ & 六面体 & 1.97 & 0.97 & 2 / 1 \\
 RT0$\times$P0 & 三角形（压力） & 1.00 & --- & 1 \\
 RT0$\times$P0 & 三角形（通量） & 1.00 & --- & 1 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 复现方式：
@@ -1568,20 +1687,25 @@ RT0$\times$P0 & 三角形（通量） & 1.00 & --- & 1 \\
 \centering
 \caption{\module{postprocess} 中的绘图函数}
 \label{tab:plots}
+\begin{lrbox}{\guideTableBox}
 \begin{tabular}{@{}L{5.6cm}L{9.8cm}@{}}
 \toprule
 函数 & 用途 \\
 \midrule
-\code{plot\_solution(u, mesh, V, ...)} & 画解。1D 画曲线；2D 画等值线填充或三维曲面；
+\code{plot\_\allowbreak solution(u,\allowbreak  mesh,\allowbreak  V,\allowbreak  ...)} & 画解。1D 画曲线；2D 画等值线填充或三维曲面；
 3D 画 $z=\text{const}$ 切片。多边形网格自动从形心做扇形三角化 \\
-\code{plot\_mesh(mesh, ...)} & 画网格（3D 画中间切片） \\
-\code{plot\_error(u, mesh, space, exact, ...)} & 画逐点误差 $|u_h-u|$ \\
-\code{plot\_convergence(h, errors, ...)} & log--log 收敛曲线，并叠加 $O(h^k)$ 参考斜率 \\
-\code{plot\_pressure\_2d(mesh, P, ...)} & RT0 的分片常数压力 \\
-\code{plot\_flux\_2d(mesh, Q, ...)} & 通量箭头图 \\
-\code{compare\_solutions(entries, ...)} & 多组解并排比较 \\
+\code{plot\_\allowbreak mesh(mesh,\allowbreak  ...)} & 画网格（3D 画中间切片） \\
+\code{plot\_\allowbreak error(u,\allowbreak  mesh,\allowbreak  space,\allowbreak  exact,\allowbreak  ...)} & 画逐点误差 $|u_h-u|$ \\
+\code{plot\_\allowbreak convergence(h,\allowbreak  errors,\allowbreak  ...)} & log--log 收敛曲线，并叠加 $O(h^k)$ 参考斜率 \\
+\code{plot\_\allowbreak pressure\_\allowbreak 2d(mesh,\allowbreak  P,\allowbreak  ...)} & RT0 的分片常数压力 \\
+\code{plot\_\allowbreak flux\_\allowbreak 2d(mesh,\allowbreak  Q,\allowbreak  ...)} & 通量箭头图 \\
+\code{compare\_\allowbreak solutions(entries,\allowbreak  ...)} & 多组解并排比较 \\
 \bottomrule
 \end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
 \end{table}
 
 通用参数：\code{title=}、\code{filename=}（保存 PNG）、\code{show=}（弹窗）、
@@ -1676,10 +1800,10 @@ u = p.solve()
 print("FEM P2 :", p.compute_errors(u, exact, grad))
 
 # (b) VEM: only the space changes
-V = FESpace.vem(mesh)
+V = FESpace.vem(mesh, degree=3)
 p = PoissonProblem(V, f=source, g=zero)
 u = p.solve()
-print("VEM k=1:", p.compute_errors(u, exact, grad))
+print("VEM k=3:", p.compute_errors(u, exact, grad))
 
 # (c) RT0 x P0 mixed: space + problem class
 V = FESpace.rt0(mesh)
@@ -1688,45 +1812,151 @@ Q, P = p.solve()
 print("RT0-P0 :", p.compute_errors((Q, P), exact, lambda x: -grad(x)))
 \end{lstlisting}
 
-运行结果（32$\times$32 网格）：
+当前程序会打印各方法的误差；新版 VEM 的细网格结果见下节。
 
-\begin{lstlisting}[style=textout]
-FEM P2 : {'L2': 6.87e-05, 'Linf': 2.41e-03, 'H1': 7.38e-03}
-VEM k=1: {'L2': 1.35e-03, 'Linf': 3.18e-03, 'H1': 1.09e-01}
-RT0-P0 : {'L2': 1.64e-02, 'Linf': 4.55e-02, 'flux_L2': 6.30e-02}
-\end{lstlisting}
+\section{示例三：任意阶 VEM 的二维与三维主程序}
+仍采用 FEM 主程序的阅读顺序：问题数据、选网格、选元与求解器、可视化。
+方程为 $-\Delta u=f$，区域为 $(0,1)^d$，精确解为
+$u=\prod_{j=1}^d\sin(\pi x_j)$，$f=d\pi^2u$，边界为零。
+以下两个程序可分别保存到 \code{examples} 目录运行；
+代码库中的完整版本是 \path{examples/vem_poisson.py} 和
+\path{examples/vem_poisson_3d.py}，另含网格图、误差与 JSON 输出。
 
-\section{示例三：多边形网格上的虚拟元}
-
-\begin{lstlisting}[language=MosicaFE,caption={示例 10.3：Voronoi 多边形网格 + 收敛性研究}]
+\begin{lstlisting}[language=MosicaFE,caption={二维独立主程序}]
+import os
+import sys
 import numpy as np
-from MosicaFE import FESpace, Mesh, PoissonProblem, convergence_study
-from MosicaFE.postprocess import estimate_convergence_rate, plot_solution
 
-def mesh_factory(level):
-    return Mesh.voronoi_polygon(n_points=50 * 4**level, seed=7)
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+from MosicaFE import Mesh, plot_solution, solve_poisson
 
-def problem_factory(mesh):
-    return PoissonProblem(FESpace.vem(mesh), f=source, g=lambda x: 0.0)
+OUT = os.path.join(HERE, "output", "vem_2d")
+os.makedirs(OUT, exist_ok=True)
 
-h, errors = convergence_study(mesh_factory, problem_factory,
-                              exact, grad, refinement_levels=3,
-                              verbose=True)
-print("L2 rate:", estimate_convergence_rate(h, errors["L2"]))
+# Problem data.
+def exact(x):
+    return np.sin(np.pi*x[0]) * np.sin(np.pi*x[1])
 
-mesh = Mesh.voronoi_polygon(n_points=200, seed=7)
-V = FESpace.vem(mesh)
-u = PoissonProblem(V, f=source, g=lambda x: 0.0).solve()
-plot_solution(u, mesh, V, title="VEM on Voronoi mesh",
-              filename="vem_voronoi.png")
+def source(x):
+    return 2*np.pi**2*exact(x)
+
+def main(n_points=1024, degree=2):
+    # Mesh.
+    mesh = Mesh.voronoi_polygon(n_points=n_points, seed=42)
+    # Element, solver, and solve.
+    out = solve_poisson(mesh, element="VEM", degree=degree,
+                        f=source, g=lambda x: 0.0,
+                        solver="direct", return_all=True)
+    u, V = out["u"], out["space"]
+    # Visualization.
+    plot_solution(u, mesh, V, title=f"VEM{degree} (2D)",
+                  filename=os.path.join(OUT, f"solution_k{degree}.png"))
+    values = V.nodal_values(u)
+    print("DOFs:", u.size, "vertex range:", values.min(), values.max())
+
+if __name__ == "__main__":
+    main()
 \end{lstlisting}
 
-\begin{caution}
-随机 Voronoi 网格的 $h$ 用"最大单元直径"会很不稳定，
-建议改用平均单元直径作为横坐标，\code{convergence\_study} 里传自定义
-\code{mesh\_factory} 即可（示例中用的是 \code{mesh.get\_mesh\_size()}，
-若要更稳健可在回调里替换）。
-\end{caution}
+\begin{lstlisting}[language=MosicaFE,caption={三维独立主程序}]
+import os
+import sys
+import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+from MosicaFE import Mesh, plot_solution, solve_poisson
+
+OUT = os.path.join(HERE, "output", "vem_3d")
+os.makedirs(OUT, exist_ok=True)
+
+# Problem data.
+def exact(x):
+    return np.sin(np.pi*x[0]) * np.sin(np.pi*x[1]) * np.sin(np.pi*x[2])
+
+def source(x):
+    return 3*np.pi**2*exact(x)
+
+def main(n_points=192, degree=2):
+    # Mesh.
+    mesh = Mesh.voronoi_polyhedron(n_points=n_points, seed=42)
+    # Element, solver, and solve.
+    out = solve_poisson(mesh, element="VEM", degree=degree,
+                        f=source, g=lambda x: 0.0,
+                        solver="direct", return_all=True)
+    u, V = out["u"], out["space"]
+    # Visualization.
+    plot_solution(u, mesh, V, title=f"VEM{degree} (3D)", z_slice=0.5,
+                  filename=os.path.join(OUT, f"solution_k{degree}.png"))
+    values = V.nodal_values(u)
+    print("DOFs:", u.size, "vertex range:", values.min(), values.max())
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+只改 \code{degree} 就能切换阶数，\code{main(n\_\allowbreak points=...,\allowbreak  degree=3)} 可运行三阶。
+二维默认 1024 个多边形，三维默认 192 个多面体，输出目录分开。
+二维解图采用顶点插值；三维 \code{z\_\allowbreak slice=0.5} 按真实平面切割积分四面体，
+在截面点计算 $L^2$ 投影值，不能理解为挑选附近顶点作图。
+\subsection{细网格结果与误差图}
+\label{sec:vem-fine-results}
+下表直接取自 \path{examples/output/vem_2d/summary.json} 与
+\path{examples/output/vem_3d/summary.json}，随机种子均为 42。
+这里报告 $\|u-\Pi_k^0u_h\|_{L^2}$ 和
+$\|\nabla u-\nabla\Pi_k^\nabla u_h\|_{L^2}$；$H^1$ 一列是半范数误差。
+
+\begin{table}[htbp]
+\centering\small
+\caption{保存的二维与三维 VEM 细网格结果}
+\begin{lrbox}{\guideTableBox}
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+$d$ & $N$ & $k$ & 自由度 & $L^2$ & $H^1$ \\
+\midrule
+2 & 256 & 2 & 1539 & $1.952\times10^{-4}$ & $1.328\times10^{-2}$ \\
+2 & 1024 & 2 & 6147 & $2.548\times10^{-5}$ & $3.378\times10^{-3}$ \\
+2 & 1024 & 3 & 11268 & $4.038\times10^{-7}$ & $6.825\times10^{-5}$ \\
+3 & 96 & 2 & 2361 & $7.294\times10^{-3}$ & $1.781\times10^{-1}$ \\
+3 & 192 & 2 & 4977 & $4.015\times10^{-3}$ & $1.212\times10^{-1}$ \\
+3 & 192 & 3 & 10527 & $9.961\times10^{-4}$ & $1.919\times10^{-2}$ \\
+\bottomrule
+\end{tabular}
+\end{lrbox}%
+\ifdim\wd\guideTableBox>\linewidth
+  \resizebox{\linewidth}{!}{\usebox{\guideTableBox}}%
+\else\usebox{\guideTableBox}\fi
+\end{table}
+
+误差图将各维度分开展示。每组只有两个非嵌套网格的二阶结果，
+三阶仅有细网格点，因此用于观察加密和提阶效果，不据此宣称渐近收敛阶。
+在常规网格正则性、解的光滑性、稳定化及求积精度条件成立时，
+预期 $H^1$ 误差为 $O(h^k)$，$L^2$ 误差为 $O(h^{k+1})$；
+当前高阶单项式基的数值条件数也会影响实际表现。
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.70\textwidth]{guidebook_assets/solution_2d.png}\par\medskip
+\includegraphics[width=0.92\textwidth]{guidebook_assets/errors_2d.png}
+\caption{2 维三阶 VEM 解图（1024 个单元）及保存结果的误差比较。}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.70\textwidth]{guidebook_assets/solution_3d.png}\par\medskip
+\includegraphics[width=0.92\textwidth]{guidebook_assets/errors_3d.png}
+\caption{3 维三阶 VEM 解图（192 个单元）及保存结果的误差比较。 解图为 $z=0.5$ 真实截面。}
+\end{figure}
+
+\clearpage
+在项目根目录复现默认细网格算例，并检查实现：
+
+\begin{lstlisting}[style=shell]
+python examples/vem_poisson.py
+python examples/vem_poisson_3d.py
+python tests/run_tests.py
+\end{lstlisting}
 
 \section{示例四：自定义新 PDE（Helmholtz）}
 
@@ -1800,7 +2030,7 @@ print(problem.compute_error(u, exact, "L2"))     # ~6.8e-05
 精确解属于离散空间时，数值解必须精确。
 
 \textbf{结论}：见式 \eqref{eq:bc-lift}，第 (1) 步不可省。
-\mosica{} 把这条测试写进了 \code{tests/test\_core\_spaces.py}。
+\mosica{} 把这条测试写进了 \path{tests/test_core_spaces.py}。
 
 \subsection{陷阱二：张量积单元的求积阶不足}
 
@@ -1810,33 +2040,19 @@ print(problem.compute_error(u, exact, "L2"))     # ~6.8e-05
 而每个方向只用了 1 个 Gauss 点时只能精确到 1 次，欠积分导致
 单元矩阵不是正定的、能量被系统性低估。
 
-\textbf{结论}：张量积单元的求积阶取 \code{max(2, 2*p)}（每方向 $p$ 个点起步），
+\textbf{结论}：张量积单元的求积阶取 \code{max(2,\allowbreak  2*p)}（每方向 $p$ 个点起步），
 见表格 \ref{tab:quad} 后的注意事项。
 
-\subsection{陷阱三：虚拟元投影的常数模式规范化}
+\subsection{陷阱三：高阶投影的常数规范化}
+梯度 Gram 矩阵的常数行是零，不能直接求逆。当前实现按式 \eqref{eq:vem-const}
+替换常数行：$k=1$ 用顶点均值，$k\ge2$ 用真实单元均值。
+应对 $\mathcal P_k$ 检查 $P_\nabla D=I$、$P_0D=I$，而不只检查一次函数。
 
-\textbf{症状}：三角形与正方形网格上 VEM 收敛阶正常，
-但换到 Voronoi 多边形网格，$L^2$ 收敛阶从 2 掉到 0.5 以下，
-误差在 $10^{-2}$ 处停滞。
-
-\textbf{诊断}：把线性精确解代入，检查数值解是否精确（patch test），
-发现不规则多边形上失败。
-
-\textbf{结论}：常数模式必须按式 \eqref{eq:vem-const} 规范化，
-使投影精确再生一次多项式；否则稳定化项会惩罚线性函数，
-破坏相容性。
-
-\subsection{陷阱四：载荷 / 质量矩阵的几何权重}
-
-\textbf{症状}：即使修好了投影，不规则多边形网格上的 $L^2$ 误差仍然偏大。
-
-\textbf{诊断}：把 $\int_K\varphi_i$ 一律取成 $|K|/n$，
-相当于假设每个顶点"平分"单元。对三角形、正四边形这是对的，
-但对边长差异很大的多边形，短边上的顶点会被严重高估。
-
-\textbf{结论}：改用式 \eqref{eq:vem-load} 的扇形线性插值，
-几何权重由单元自身形状决定。修复后 Voronoi 网格的
-$L^2$ 收敛阶回到 1.97。
+\subsection{陷阱四：把高阶积分矩当作点值}
+矩自由度是 $|E|^{-1}\int_Eu m_\alpha$，不能用实体中心的函数值代替。
+载荷与质量必须按式 \eqref{eq:vem-load} 用 $L^2$ 投影构造；
+常函数检查使用 \code{V.interpolate} 计算常函数自由度，不能假设所有自由度均为 1。
+归一化面矩也必须用于非零 Dirichlet 数据。
 
 \subsection{陷阱五：numpy 的重复下标赋值}
 
@@ -1852,7 +2068,7 @@ $L^2$ 收敛阶回到 1.97。
 \section{网格细化策略}
 
 \begin{itemize}[itemsep=0.2em]
-  \item \textbf{均匀加密}：\code{mesh.refine\_uniform()}，
+  \item \textbf{均匀加密}：\code{mesh.refine\_\allowbreak uniform()}，
         三角形单元数 $\times4$、六面体 $\times8$；
   \item \textbf{自适应加密（规划中）}：基于残差型误差指示子
         \begin{equation}
@@ -1870,8 +2086,8 @@ $L^2$ 收敛阶回到 1.97。
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
   \item 组装阶段累计 COO 三元组，最后一次转成 CSR；
   \item 参考单元上的基函数求值按"求积点"缓存
-        （\code{LagrangeSpace.\_quadrature\_data}），避免逐单元重复计算；
-  \item 对同一网格上多种物理问题，\code{stiffness\_matrix()} 的结果可以复用；
+        （\code{LagrangeSpace.\_\allowbreak quadrature\_\allowbreak data}），避免逐单元重复计算；
+  \item 对同一网格上多种物理问题，\code{stiffness\_\allowbreak matrix()} 的结果可以复用；
   \item 大规模问题建议改用迭代法；
   \item 若要进一步提速，可以把单元循环用 \code{numba} 或
         "按单元类型分块 + 批量张量运算"的方式向量化。
@@ -1900,13 +2116,13 @@ $L^2$ 收敛阶回到 1.97。
 步骤：
 
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
-  \item 新建 \code{MosicaFE/spaces/yourspace.py}，继承 \code{BaseFESpace}；
-  \item 实现 \code{\_build\_dof\_map()}：建立单元局部自由度到全局自由度的映射，
-        并填写 \code{n\_dofs}、\code{dof\_support}、\code{dof\_is\_interior}；
-  \item 实现 \code{stiffness\_matrix()}、\code{mass\_matrix()}、\code{load\_vector(f)}；
-  \item 实现 \code{interpolate(f)} 与 \code{evaluate(cell, u, points)}；
-  \item 在 \code{spaces/factory.py} 的 \code{FESpace.FAMILIES} 中注册；
-  \item 在 \code{tests/} 中补上 patch test 与收敛阶测试。
+  \item 新建 \path{MosicaFE/spaces/yourspace.py}，继承 \code{BaseFESpace}；
+  \item 实现 \code{\_\allowbreak build\_\allowbreak dof\_\allowbreak map()}：建立单元局部自由度到全局自由度的映射，
+        并填写 \code{n\_\allowbreak dofs}、\code{dof\_\allowbreak support}、\code{dof\_\allowbreak is\_\allowbreak interior}；
+  \item 实现 \code{stiffness\_\allowbreak matrix()}、\code{mass\_\allowbreak matrix()}、\code{load\_\allowbreak vector(f)}；
+  \item 实现 \code{interpolate(f)} 与 \code{evaluate(cell,\allowbreak  u,\allowbreak  points)}；
+  \item 在 \path{spaces/factory.py} 的 \code{FESpace.FAMILIES} 中注册；
+  \item 在 \path{tests/} 中补上 patch test 与收敛阶测试。
 \end{enumerate}
 
 \begin{lstlisting}[language=MosicaFE,caption={示例 12.1：显式基函数空间的骨架},label={lst:newspace}]
@@ -1945,9 +2161,9 @@ class MySpace(BaseFESpace):
 
 \begin{important}
 如果新单元的基函数是显式的（例如更高次的 Lagrange、DG、
-或张量积的其它族），可以参考 \code{spaces/lagrange.py}：
+或张量积的其它族），可以参考 \path{spaces/lagrange.py}：
 它已经实现了通用的"参考单元求值 + 逐单元变换"组装循环，
-通常只需要提供 \code{eval\_basis} 与自由度布局。
+通常只需要提供 \code{eval\_\allowbreak basis} 与自由度布局。
 \end{important}
 
 \section{新增一门方程}
@@ -1972,9 +2188,9 @@ class MyProblem(BasePhysics):
         return self.apply_boundary_conditions(A, b)
 \end{lstlisting}
 
-注册之后，\code{available\_problems()} 会包含 \code{"my\_pde"}，
-并且 \code{create\_problem("my\_pde", V, ...)} 与
-\code{run("my\_pde", mesh, element="VEM", ...)} 立刻可用。
+注册之后，\code{available\_\allowbreak problems()} 会包含 \code{"my\_\allowbreak pde"}，
+并且 \code{create\_\allowbreak problem("my\_\allowbreak pde",\allowbreak  V,\allowbreak  ...)} 与
+\code{run("my\_\allowbreak pde",\allowbreak  mesh,\allowbreak  element="VEM",\allowbreak  ...)} 立刻可用。
 
 \section{新增一种混合格式（以 RT0$\times$P0 为模板）}
 
@@ -1983,24 +2199,24 @@ class MyProblem(BasePhysics):
 RT0$\times$P0 在库内就是按这个模板实现的，可以照抄：
 
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
-  \item 如果需要新的面自由度布局，先在 \code{core/facets.py} 拿到面拓扑
-        （全局面编号、\code{cell\_facets}、\code{signs}）；
+  \item 如果需要新的面自由度布局，先在 \path{core/facets.py} 拿到面拓扑
+        （全局面编号、\code{cell\_\allowbreak facets}、\code{signs}）；
   \item 在空间里实现"块"接口：本例是
-        \code{flux\_mass\_matrix()}（$(\Phi,\Phi)$）与
-        \code{divergence\_matrix()}（$(P,\Phi)$），
-        外加 \code{pressure\_load\_vector(f)}；
-  \item 在物理层用 \code{bmat}（来自 \code{MosicaFE.\_compat}）把块拼成鞍点矩阵：
-        \code{bmat([[M, -B.T], [B, None]])}；
+        \code{flux\_\allowbreak mass\_\allowbreak matrix()}（$(\Phi,\Phi)$）与
+        \code{divergence\_\allowbreak matrix()}（$(P,\Phi)$），
+        外加 \code{pressure\_\allowbreak load\_\allowbreak vector(f)}；
+  \item 在物理层用 \code{bmat}（来自 \code{MosicaFE.\_\allowbreak compat}）把块拼成鞍点矩阵：
+        \code{bmat([[M,\allowbreak  -B.T],\allowbreak  [B,\allowbreak  None]])}；
   \item 求解方式：\code{"direct"}、\code{"schur"}（静力凝聚）
         或 \code{Solver.minres}（对称不定）；
-  \item 误差分析放进 \code{postprocess/error.py}，
-        参照 \code{mixed\_error\_norms}（压力 + 通量各一套范数）。
+  \item 误差分析放进 \path{postprocess/error.py}，
+        参照 \code{mixed\_\allowbreak error\_\allowbreak norms}（压力 + 通量各一套范数）。
 \end{enumerate}
 
 \begin{important}
 \code{physics} 层只有 6 行拼装代码（见
-\code{physics/mixed\_poisson.py} 的 \code{assemble}），
-而单元几何与数值积分全部留在 \code{spaces/rt0.py}。
+\path{physics/mixed_poisson.py} 的 \code{assemble}），
+而单元几何与数值积分全部留在 \path{spaces/rt0.py}。
 因此换一套混合元（例如 BDM1、或 Stokes 的 $Q_2\times Q_1$ 配对）
 时，只需要提供新的块，物理层与后处理可以原样复用。
 \end{important}
@@ -2008,8 +2224,8 @@ RT0$\times$P0 在库内就是按这个模板实现的，可以照抄：
 \section{新增一种网格}
 
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
-  \item 在 \code{core/mesh.py} 中新增一个类方法，
-        返回 \code{Mesh(nodes, elements, element\_type, name=...)}；
+  \item 在 \path{core/mesh.py} 中新增一个类方法，
+        返回 \code{Mesh(nodes,\allowbreak  elements,\allowbreak  element\_\allowbreak type,\allowbreak  name=...)}；
   \item 2D 单元会自动按带符号面积纠正为逆时针；
         3D 四面体会按体积纠正取向；
   \item 如果 3D 单元不是四面体 / 六面体，
@@ -2037,8 +2253,8 @@ print(mesh.summary())
 \begin{enumerate}[label=(\arabic*),itemsep=0.2em]
   \item 先写\textbf{失败}的测试（patch test、收敛阶、对称性等）；
   \item 再实现功能；
-  \item 跑 \code{tests/run\_tests.py} 与 \code{tests/run\_checks.py}；
-  \item 更新 \code{progress/} 下的进度与验证记录。
+  \item 跑 \path{tests/run_tests.py} 与 \path{tests/run_checks.py}；
+  \item 更新 \path{progress/} 下的进度与验证记录。
 \end{enumerate}
 
 每个新特性至少要覆盖：
@@ -2047,7 +2263,7 @@ print(mesh.summary())
   \item 单元级：基函数的 Kronecker 性质、单位分解、单元矩阵对称性/正定性；
   \item 空间级：全局矩阵的对称性、常数核、$M$ 行和与 $b(f\equiv1)$ 的一致性；
   \item 问题级：patch test（线性精确解必须精确）、收敛阶；
-  \item 端到端：\code{solve\_poisson} / \code{run} 一行接口可用。
+  \item 端到端：\code{solve\_\allowbreak poisson} / \code{run} 一行接口可用。
 \end{itemize}
 
 % ===========================================================================
@@ -2105,42 +2321,41 @@ $env:PYTHONPATH = "D:\mosica"
 
 \paragraph{问：怎样选择多项式次数？}
 答：绝大多数情形 P2 / Q2 的精度/开销比最好；先用 P1 做快速验证，
-解很光滑时再上二次元。虚拟元目前只有 $k=1$。
+解很光滑时再上二次元。VEM 支持任意正整数 $k$，用 \code{degree=k} 选择；高阶需留意矩阵条件数。
 
 \paragraph{问：什么时候用迭代法？}
 答：自由度少于约 $2\times10^4$ 时直接法最省心；
 更大规模改用 CG（对称正定）或 GMRES（一般）。
 
 \paragraph{问：VEM 与 FEM 到底差在哪？}
-答：在三角形网格上，$k=1$ 虚拟元空间恰好等于 P1 有限元空间，
-两者数值结果完全相同（本库实测两者误差逐位一致）。
-VEM 的优势出现在\textbf{一般多边形网格}上：它允许每个单元的面数不同、
-允许非结构的多边形剖分，而经典 Lagrange 有限元需要单元形状统一。
+答：VEM 通过多项式投影和稳定化使用隐式基函数，可直接处理合格的多边形、多面体及不同面数的单元。
+三角形一阶是与 P1 接近的特殊情形；高阶 VEM 含积分矩，不能直接等同于同阶 Lagrange 元。
+其几何条件见第 \ref{sec:vem-mesh-general} 节。
 
 \paragraph{问：为什么 RT0 的解返回两个数组？}
 答：混合格式同时求解通量 $q_h$ 与压力 $p_h$。
-\code{Q[c,i]} 是单元 $c$ 第 $i$ 个面（按"不含顶点 $i$"编号）上的
+\code{Q[c,\allowbreak i]} 是单元 $c$ 第 $i$ 个面（按"不含顶点 $i$"编号）上的
 外法向通量，\code{P[c]} 是该单元的常数压力。
 
 \paragraph{问：RT0 需要安装或接入外部程序吗？}
 答：不需要。RT0$\times$P0 已经是 \mosica{} 自己的方法：显式基函数
-$\varphi_i=(x-a_i)/(d|K|)$ 与精确质量矩阵在 \code{spaces/rt0.py}，
-面拓扑与定向在 \code{core/facets.py}，鞍点组装在
-\code{physics/mixed\_poisson.py}，误差范数在 \code{postprocess/error.py}。
+$\varphi_i=(x-a_i)/(d|K|)$ 与精确质量矩阵在 \path{spaces/rt0.py}，
+面拓扑与定向在 \path{core/facets.py}，鞍点组装在
+\path{physics/mixed_poisson.py}，误差范数在 \path{postprocess/error.py}。
 库的依赖仍然只有 numpy（scipy / matplotlib 可选），
 \code{import MosicaFE} 之后 \code{FESpace.rt0(mesh)} 直接可用。
 
 \paragraph{问：能求解时间相关问题吗？}
 答：当前版本只处理稳态椭圆问题。时间相关问题建议用"线方法"：
 空间离散得到 $M\dot u+Au=b$，时间方向自行用显式/隐式格式推进。
-\code{mass\_matrix()} 已经提供。
+\code{mass\_\allowbreak matrix()} 已经提供。
 
 \paragraph{问：能求解非线性问题吗？}
 答：框架面向线性问题。非线性问题建议在外层写 Newton 迭代，
 每一步用 \mosica{} 组装雅可比并求解。
 
 \paragraph{问：怎样把结果导出到 ParaView？}
-答：用 \code{space.nodal\_values(u)} 取得节点值，
+答：用 \code{space.nodal\_\allowbreak values(u)} 取得节点值，
 配合 \code{mesh.nodes} 与 \code{mesh.elements} 自行写
 \code{.vtu} 或 \code{.vtk}；也可以在 \code{postprocess} 中新增导出函数。
 
@@ -2164,25 +2379,25 @@ $\varphi_i=(x-a_i)/(d|K|)$ 与精确质量矩阵在 \code{spaces/rt0.py}，
 \endhead
 \code{Mesh} & 网格对象与工厂方法 \\
 \code{FESpace} & 空间工厂：\code{lagrange} / \code{vem} / \code{rt0} / \code{create} \\
-\code{FacetTopology}, \code{build\_facet\_topology} & 面拓扑与定向（$H(\mathrm{div})$ 空间） \\
+\code{FacetTopology}, \code{build\_\allowbreak facet\_\allowbreak topology} & 面拓扑与定向（$H(\mathrm{div})$ 空间） \\
 \code{QuadratureRule} & 参考单元求积规则 \\
-\code{cell\_quadrature(...)} / \code{simplex\_quadrature(...)} & 物理单元 / 任意单纯形上的求积点与权重 \\
+\code{cell\_\allowbreak quadrature(...)} / \code{simplex\_\allowbreak quadrature(...)} & 物理单元 / 任意单纯形上的求积点与权重 \\
 \code{BaseFESpace} & 空间基类 \\
 \code{LagrangeSpace} / \code{VEMSpace} / \code{RT0Space} & 三种空间 \\
-\code{rt0\_flux\_basis}, \code{rt0\_mass\_matrices} & RT0 显式基函数与精确质量矩阵 \\
+\code{rt0\_\allowbreak flux\_\allowbreak basis}, \code{rt0\_\allowbreak mass\_\allowbreak matrices} & RT0 显式基函数与精确质量矩阵 \\
 \code{BasePhysics} & 物理问题基类 \\
 \code{PoissonProblem} & $-\nabla\cdot(\kappa\nabla u)=f$ \\
 \code{MixedPoissonProblem} & RT0$\times$P0 混合形式 \\
 \code{ReactionDiffusionProblem} & $-\Delta u+cu=f$ \\
-\code{register\_problem}, \code{create\_problem}, \code{available\_problems} & PDE 注册表 \\
+\code{register\_\allowbreak problem}, \code{create\_\allowbreak problem}, \code{available\_\allowbreak problems} & PDE 注册表 \\
 \code{Solver} & 线性求解器（direct / cg / gmres / bicgstab / minres / auto） \\
-\code{compute\_error} / \code{compute\_errors} & 误差范数 \\
-\code{mixed\_error\_norms} & RT0$\times$P0 的压力 / 通量误差范数 \\
-\code{convergence\_study} & 收敛性研究 \\
-\code{estimate\_convergence\_rate} & 收敛阶估计 \\
-\code{plot\_solution} / \code{plot\_mesh} / \code{plot\_error} & 可视化 \\
-\code{plot\_convergence} / \code{plot\_pressure\_2d} / \code{plot\_flux\_2d} & 可视化 \\
-\code{solve\_poisson} & 一行式 Poisson 求解 \\
+\code{compute\_\allowbreak error} / \code{compute\_\allowbreak errors} & 误差范数 \\
+\code{mixed\_\allowbreak error\_\allowbreak norms} & RT0$\times$P0 的压力 / 通量误差范数 \\
+\code{convergence\_\allowbreak study} & 收敛性研究 \\
+\code{estimate\_\allowbreak convergence\_\allowbreak rate} & 收敛阶估计 \\
+\code{plot\_\allowbreak solution} / \code{plot\_\allowbreak mesh} / \code{plot\_\allowbreak error} & 可视化 \\
+\code{plot\_\allowbreak convergence} / \code{plot\_\allowbreak pressure\_\allowbreak 2d} / \code{plot\_\allowbreak flux\_\allowbreak 2d} & 可视化 \\
+\code{solve\_\allowbreak poisson} & 一行式 Poisson 求解 \\
 \code{run} & 按名字求解任意已注册 PDE \\
 \bottomrule
 \end{longtable}
@@ -2200,21 +2415,22 @@ $\varphi_i=(x-a_i)/(d|K|)$ 与精确质量矩阵在 \code{spaces/rt0.py}，
 方法 / 属性 & 说明 \\
 \midrule
 \endhead
-\code{Mesh.interval(a,b,nx)} & 一维区间网格 \\
-\code{Mesh.rectangle(...)} & 二维矩形网格（\code{triangle}/\code{quad}） \\
-\code{Mesh.box(...)} & 三维长方体网格（\code{tet}/\code{hex}） \\
-\code{Mesh.pentagon(nx,ny)} & 五边形网格 \\
-\code{Mesh.voronoi\_polygon(...)} & Voronoi 多边形网格 \\
-\code{Mesh.from\_arrays(...)} & 自定义网格 \\
-\code{mesh.refine\_uniform()} & 均匀加密 \\
-\code{mesh.get\_mesh\_size()} & 最大单元直径 $h$ \\
-\code{mesh.get\_cell\_vertices(i)} & 单元顶点坐标 \\
-\code{mesh.get\_cell\_measure(i)} & 单元面积 / 体积 \\
-\code{mesh.get\_cell\_diameter(i)} & 单元直径 \\
-\code{mesh.get\_cell\_centroid(i)} & 单元形心 \\
-\code{mesh.boundary\_nodes} & 边界顶点编号 \\
-\code{mesh.boundary\_facets} / \code{mesh.facets} & facet 拓扑 \\
-\code{mesh.facet\_topology} & \code{FacetTopology}：全局面编号、共享面、外法向符号 \\
+\code{Mesh.interval(a,\allowbreak b,\allowbreak nx)} & 一维区间网格 \\
+\code{Mesh.rectangle(...)} & 二维矩形网格（\code{triangle}/\allowbreak\code{quad}） \\
+\code{Mesh.box(...)} & 三维长方体网格（\code{tet}/\allowbreak\code{hex}） \\
+\code{Mesh.pentagon(nx,\allowbreak ny)} & 五边形网格 \\
+\code{Mesh.voronoi\_\allowbreak polygon(...)} & Voronoi 多边形网格 \\
+\code{Mesh.voronoi\_\allowbreak polyhedron(...)} & Voronoi 多面体网格 \\
+\code{Mesh.from\_\allowbreak arrays(...)} & 自定义网格 \\
+\code{mesh.refine\_\allowbreak uniform()} & 均匀加密 \\
+\code{mesh.get\_\allowbreak mesh\_\allowbreak size()} & 最大单元直径 $h$ \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak vertices(i)} & 单元顶点坐标 \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak measure(i)} & 单元面积 / 体积 \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak diameter(i)} & 单元直径 \\
+\code{mesh.get\_\allowbreak cell\_\allowbreak centroid(i)} & 单元形心 \\
+\code{mesh.boundary\_\allowbreak nodes} & 边界顶点编号 \\
+\code{mesh.boundary\_\allowbreak facets} / \code{mesh.facets} & facet 拓扑 \\
+\code{mesh.facet\_\allowbreak topology} & \code{FacetTopology}：全局面编号、共享面、外法向符号 \\
 \code{mesh.summary()} & 一行摘要 \\
 \bottomrule
 \end{longtable}
@@ -2232,30 +2448,30 @@ $\varphi_i=(x-a_i)/(d|K|)$ 与精确质量矩阵在 \code{spaces/rt0.py}，
 方法 & 说明 \\
 \midrule
 \endhead
-\code{FESpace.lagrange(mesh, degree)} & 连续 Lagrange（P1/P2/Q1/Q2） \\
-\code{FESpace.vem(mesh, degree=1)} & 虚拟元（$k=1$） \\
+\code{FESpace.lagrange(mesh,\allowbreak  degree)} & 连续 Lagrange（P1/P2/Q1/Q2） \\
+\code{FESpace.vem(mesh,\allowbreak  degree=k)} & 增强型虚拟元（正整数 $k$） \\
 \code{FESpace.rt0(mesh)} & RT0$\times$P0 混合空间 \\
-\code{FESpace.create(mesh, family, degree)} & 按名字创建 \\
+\code{FESpace.create(mesh,\allowbreak  family,\allowbreak  degree)} & 按名字创建 \\
 \code{FESpace.available()} & 可用空间族 \\
-\code{V.n\_dofs} & 自由度个数 \\
-\code{V.get\_cell\_dofs(i)} & 单元局部 → 全局自由度 \\
-\code{V.get\_dof\_coordinates(k)} & 自由度坐标 \\
-\code{V.boundary\_dofs()} & Dirichlet 自由度 \\
-\code{V.eval\_basis(xi)} / \code{V.eval\_basis\_grad(xi)} & 参考单元基函数 \\
-\code{V.stiffness\_matrix()} & 刚度矩阵 \\
-\code{V.mass\_matrix()} & 质量矩阵 \\
-\code{V.load\_vector(f)} & 载荷向量 \\
+\code{V.n\_\allowbreak dofs} & 自由度个数 \\
+\code{V.get\_\allowbreak cell\_\allowbreak dofs(i)} & 单元局部 → 全局自由度 \\
+\code{V.get\_\allowbreak dof\_\allowbreak coordinates(k)} & 自由度坐标 \\
+\code{V.boundary\_\allowbreak dofs()} & Dirichlet 自由度 \\
+\code{V.eval\_\allowbreak basis(xi)} / \code{V.eval\_\allowbreak basis\_\allowbreak grad(xi)} & 参考单元基函数 \\
+\code{V.stiffness\_\allowbreak matrix()} & 刚度矩阵 \\
+\code{V.mass\_\allowbreak matrix()} & 质量矩阵 \\
+\code{V.load\_\allowbreak vector(f)} & 载荷向量 \\
 \code{V.interpolate(f)} & 插值 \\
-\code{V.evaluate(c, u, pts)}, \code{V.evaluate\_gradient(...)} & 单元内重构求值 \\
-\code{V.nodal\_values(u)} & 节点值（可视化用） \\
+\code{V.evaluate(c,\allowbreak  u,\allowbreak  pts)}, \code{V.evaluate\_\allowbreak gradient(...)} & 单元内重构求值 \\
+\code{V.nodal\_\allowbreak values(u)} & 节点值（可视化用） \\
 \midrule
-\code{V.flux\_mass\_matrix()} & RT0：$(\Phi,\Phi)$ 块（精确闭式质量矩阵） \\
-\code{V.divergence\_matrix()} & RT0：$(P,\Phi)$ 块（散度，恒为 $\pm1$） \\
-\code{V.pressure\_load\_vector(f)} & RT0：压力方程右端项 $\int_K f$ \\
-\code{V.interpolate\_pressure(f)} / \code{V.interpolate\_flux(q)} & RT0：两个场各自的插值 \\
-\code{V.evaluate\_flux(c, Q, pts)} & RT0：单元内重构 $q_h$ \\
-\code{V.locate\_cell(x)} & RT0：定位点所在单元 \\
-\code{V.n\_flux} / \code{V.n\_pressure} / \code{V.topology} & RT0：自由度规模与面拓扑 \\
+\code{V.flux\_\allowbreak mass\_\allowbreak matrix()} & RT0：$(\Phi,\Phi)$ 块（精确闭式质量矩阵） \\
+\code{V.divergence\_\allowbreak matrix()} & RT0：$(P,\Phi)$ 块（散度，恒为 $\pm1$） \\
+\code{V.pressure\_\allowbreak load\_\allowbreak vector(f)} & RT0：压力方程右端项 $\int_K f$ \\
+\code{V.interpolate\_\allowbreak pressure(f)} / \code{V.interpolate\_\allowbreak flux(q)} & RT0：两个场各自的插值 \\
+\code{V.evaluate\_\allowbreak flux(c,\allowbreak  Q,\allowbreak  pts)} & RT0：单元内重构 $q_h$ \\
+\code{V.locate\_\allowbreak cell(x)} & RT0：定位点所在单元 \\
+\code{V.n\_\allowbreak flux} / \code{V.n\_\allowbreak pressure} / \code{V.topology} & RT0：自由度规模与面拓扑 \\
 \bottomrule
 \end{longtable}
 \endgroup
@@ -2272,16 +2488,16 @@ $\varphi_i=(x-a_i)/(d|K|)$ 与精确质量矩阵在 \code{spaces/rt0.py}，
 方法 & 说明 \\
 \midrule
 \endhead
-\code{PoissonProblem(V, f, g, kappa)} & 构造 \\
+\code{PoissonProblem(V,\allowbreak  f,\allowbreak  g,\allowbreak  kappa)} & 构造 \\
 \code{problem.assemble()} & 返回 $(A,b)$（含边界条件） \\
 \code{problem.solve(method)} & 组装并求解 \\
-\code{problem.compute\_error(u, exact, norm)} & 单个误差范数 \\
-\code{problem.compute\_errors(u, exact, grad)} & 全部误差范数 \\
+\code{problem.compute\_\allowbreak error(u,\allowbreak  exact,\allowbreak  norm)} & 单个误差范数 \\
+\code{problem.compute\_\allowbreak errors(u,\allowbreak  exact,\allowbreak  grad)} & 全部误差范数 \\
 \code{MixedPoissonProblem(...)} & 返回 $(Q,P)$ \\
-\code{mixed.error\_norms(P, Q, p\_exact, q\_exact)} & 压力/通量误差 \\
-\code{mixed.check\_conservation()} & 单元质量守恒误差 \\
-\code{mixed.flux\_at\_points(points)} & 给定点上的通量重构（自动定位单元） \\
-\code{mixed.cell\_flux(cell)} & 单元形心处的通量向量（画箭头用） \\
+\code{mixed.error\_\allowbreak norms(P,\allowbreak  Q,\allowbreak  p\_\allowbreak exact,\allowbreak  q\_\allowbreak exact)} & 压力/通量误差 \\
+\code{mixed.check\_\allowbreak conservation()} & 单元质量守恒误差 \\
+\code{mixed.flux\_\allowbreak at\_\allowbreak points(points)} & 给定点上的通量重构（自动定位单元） \\
+\code{mixed.cell\_\allowbreak flux(cell)} & 单元形心处的通量向量（画箭头用） \\
 \code{mixed.solve(method)} & 鞍点系统的三种求解方式：\code{direct} / \code{schur} / \code{minres} \\
 \bottomrule
 \end{longtable}
@@ -2299,23 +2515,23 @@ $\varphi_i=(x-a_i)/(d|K|)$ 与精确质量矩阵在 \code{spaces/rt0.py}，
 方法 & 说明 \\
 \midrule
 \endhead
-\code{Solver.direct(A,b)} & 直接法 \\
-\code{Solver.conjugate\_gradient(...)} & CG \\
-\code{Solver.gmres(A,b,tol)} & GMRES \\
-\code{Solver.bicgstab(A,b,tol)} & BiCGSTAB \\
-\code{Solver.minres(A,b,tol)} & MINRES \\
-\code{Solver.solve(A,b,method)} & 统一入口 \\
-\code{Solver.apply\_dirichlet(...)} & 强加 Dirichlet \\
-\code{Solver.recommend(n, symmetric)} & 推荐求解器 \\
-\code{convergence\_study(...)} & 收敛性研究 \\
-\code{estimate\_convergence\_rate(h, e)} & 收敛阶 \\
-\code{plot\_solution(u, mesh, V, ...)} & 画解 \\
-\code{plot\_mesh(mesh, ...)} & 画网格 \\
-\code{plot\_error(u, mesh, space, exact)} & 画误差 \\
-\code{plot\_convergence(h, errors)} & 画收敛曲线 \\
-\code{plot\_pressure\_2d(mesh, P)} & 画 RT0 压力 \\
-\code{plot\_flux\_2d(space=V, Q=Q)} & 画通量（用 $q_h$ 在单元形心处重构） \\
-\code{compare\_solutions(entries)} & 并排比较 \\
+\code{Solver.direct(A,\allowbreak b)} & 直接法 \\
+\code{Solver.conjugate\_\allowbreak gradient(...)} & CG \\
+\code{Solver.gmres(A,\allowbreak b,\allowbreak tol)} & GMRES \\
+\code{Solver.bicgstab(A,\allowbreak b,\allowbreak tol)} & BiCGSTAB \\
+\code{Solver.minres(A,\allowbreak b,\allowbreak tol)} & MINRES \\
+\code{Solver.solve(A,\allowbreak b,\allowbreak method)} & 统一入口 \\
+\code{Solver.apply\_\allowbreak dirichlet(...)} & 强加 Dirichlet \\
+\code{Solver.recommend(n,\allowbreak  symmetric)} & 推荐求解器 \\
+\code{convergence\_\allowbreak study(...)} & 收敛性研究 \\
+\code{estimate\_\allowbreak convergence\_\allowbreak rate(h,\allowbreak  e)} & 收敛阶 \\
+\code{plot\_\allowbreak solution(u,\allowbreak  mesh,\allowbreak  V,\allowbreak  ...)} & 画解 \\
+\code{plot\_\allowbreak mesh(mesh,\allowbreak  ...)} & 画网格 \\
+\code{plot\_\allowbreak error(u,\allowbreak  mesh,\allowbreak  space,\allowbreak  exact)} & 画误差 \\
+\code{plot\_\allowbreak convergence(h,\allowbreak  errors)} & 画收敛曲线 \\
+\code{plot\_\allowbreak pressure\_\allowbreak 2d(mesh,\allowbreak  P)} & 画 RT0 压力 \\
+\code{plot\_\allowbreak flux\_\allowbreak 2d(space=V,\allowbreak  Q=Q)} & 画通量（用 $q_h$ 在单元形心处重构） \\
+\code{compare\_\allowbreak solutions(entries)} & 并排比较 \\
 \bottomrule
 \end{longtable}
 \endgroup

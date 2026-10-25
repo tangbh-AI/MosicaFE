@@ -9,6 +9,11 @@ matplotlib（绘图）都是可选的：
 本模块把这些差异收敛到一处，其它模块一律 from MosicaFE._compat import ...
 """
 
+# 模块职责：可选依赖与矩阵格式适配
+# 集中处理 SciPy 和 Matplotlib 是否可用，让上层计算代码不必到处判断依赖。
+# 稀疏矩阵通过三元组和块矩阵接口构建；缺少 SciPy 时使用 NumPy 稠密数组完成相同接口的工作。
+
+
 from __future__ import annotations
 
 import numpy as np
@@ -167,6 +172,7 @@ def bmat(blocks):
 
 
 def _block_shape(block):
+    # 从非空矩阵块确定该块行或块列的大小，供稠密块矩阵拼接时分配空间。
     if is_sparse(block):
         return int(block.shape[0]), int(block.shape[1])
     arr = np.asarray(block)
@@ -176,6 +182,7 @@ def _block_shape(block):
 
 
 def _check_sizes(sizes, where):
+    # 检查同一块行、块列的尺寸是否一致，防止矩阵拼接后方程的未知量布局错位。
     known = [s for s in sizes if s is not None]
     if len(set(known)) > 1:
         raise ValueError(f"bmat 的{where}中各块尺寸不一致：{sizes}")
