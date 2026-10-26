@@ -76,13 +76,13 @@ _SIMPLEX_EDGES = {
 # 【重心坐标】在参考三角形上：lambda=(1-a-b, a, b)；
 # 在参考四面体上：lambda=(1-a-b-c, a, b, c)。
 # 输出 lam 是重心坐标值，grad 的“行”是参考坐标方向，“列”是各 lambda。
-def _simplex_lambdas(element_type: str, xi: np.ndarray):
+def _simplex_lambdas(element_type: str, xi: np.ndarray): #xi是参考单元坐标，形状为 (2,) 或 (3,)。
     """参考单纯形上的重心坐标及其（参考）梯度。"""
-    # 将 xi 转为一维浮点数组，例如 [[0.2,0.3]] → [0.2,0.3]。
-    xi = np.asarray(xi, dtype=float).ravel()
-    if element_type == "triangle":
+   
+    xi = np.asarray(xi, dtype=float).ravel() # 将 xi 转为一维浮点数组，例如 [[0.2,0.3]] → [0.2,0.3]。
+    if element_type == "triangle":  #判断是不是三角形
         # 三角形参考顶点为 (0,0)、(1,0)、(0,1)。
-        a, b = xi
+        a, b = xi  #提取参考点xi的坐标
         # lam=[lambda_0,lambda_1,lambda_2]，且三个重心坐标之和为1。
         lam = np.array([1.0 - a - b, a, b])
         # 第一行 d(lambda_0,lambda_1,lambda_2)/da=(-1,1,0)；
@@ -170,12 +170,117 @@ def simplex_multi_indices(element_type: str, degree: int):
     return indices
 
 
+def triangle_lagrange_basis(k, xi):
+    """在二维参考三角形上计算全部 k 阶 Lagrange 基函数及其参考梯度。
+
+    对应 PDF“任意阶 Lagrange 基函数”一节。
+
+    1. 参考三角形：K̂={(ξ,η): ξ>=0, η>=0, ξ+η<=1}。
+    2. 重心坐标：λ1=1-ξ-η，λ2=ξ，λ3=η。
+    3. 每个三元整指标 (a,b,c) 满足 a+b+c=k，对应插值点 (b/k,c/k)。
+    4. 该点对应的基函数为
+          φ_abc = [∏_{m=0}^{a-1}(kλ1-m)/(a-m)]
+                  [∏_{m=0}^{b-1}(kλ2-m)/(b-m)]
+                  [∏_{m=0}^{c-1}(kλ3-m)/(c-m)]。
+       代码中分母使用 m+1，所有因子相乘后分母仍是 a!、b!、c!，
+       因而与文档中的乘积公式完全等价，只是因子顺序略有不同。
+
+    参数
+    ----
+    k : int
+        Lagrange 多项式次数（k>=1），与网格划分次数无关。
+    xi : array-like，长度为 2
+        一个参考坐标点 (ξ,η)，不是所有插值节点的集合。
+
+    返回
+    ----
+    values : ndarray，形状 (Nk,)
+        在参考点 (ξ,η) 处所有局部基函数的值。
+    grads : ndarray，形状 (Nk,2)
+        每行 [∂φ_i/∂ξ, ∂φ_i/∂η]，仍是参考梯度。
+        真正用于物理三角形刚度矩阵时，还要做 J^(-T) 梯度变换。
+
+    重要：两个返回数组的第 i 项严格对应 simplex_multi_indices 给出的
+    第 i 个节点；切勿随意改变节点顺序，否则组装会产生错误。
+    """
+    # 把输入点整理成两个标量；例如 xi=[0.2,0.3]。
+    xi, eta = np.asarray(xi, dtype=float).ravel()
+
+    # PDF 的重心坐标 λ1、λ2、λ3。
+    # 例如 (ξ,η)=(0.2,0.3)，则 λ=(0.5,0.2,0.3)，并且和为 1。
+    lam = (1.0 - xi - eta, xi, eta)
+
+    # values 保存每个 φ_abc；grads 保存每个 φ_abc 的两个参考偏导数。
+    values, grads = [], []
+
+    def factor(t, a):
+        """计算一维乘积 F_a(t) 及其导数 F'_a(t)。
+
+        F_a(t) = ∏_{m=0}^{a-1} (k*t-m)/(m+1)。
+        例如 k=3,a=2 时：F_2(t)=(3t)(3t-1)/2。
+
+        a=0 时，空乘积约定为 1，导数为 0。
+        这里用逐次乘法及乘积求导法则，不用 F'/F，因此当 F=0
+        （恰好在其他插值节点）时，也不会出现除以零的问题。
+        """
+        # 初始尚未乘任何因子，所以 F=1，F'=0。
+        value, derivative = 1.0, 0.0
+
+        # 对 m=0,...,a-1 逐项计算乘积；若 a=0，循环不会执行。
+        for m in range(a):
+            # 本次乘上的因子 z(t)=(k*t-m)/(m+1)。
+            z = (k * t - m) / (m + 1)
+
+            # z'(t)=k/(m+1)，它是一个常数。
+            # 新乘积 = 旧乘积 * z。
+            # 新导数 = 旧导数 * z + 旧乘积 * z'（乘积求导）。
+            # Python 同时赋值会先使用右侧的“旧值”，因此不会覆盖错误。
+            derivative, value = (
+                derivative * z + value * k / (m + 1),
+                value * z,
+            )
+
+        # 分别返回 F_a(t) 和 dF_a(t)/dt。
+        return value, derivative
+
+    # 逐一处理全部 (a,b,c)：顶点、边内部、三角形内部节点均包含在内。
+    # Nk=(k+1)(k+2)/2；例如 k=3 时共 10 个三元整指标。
+    for a, b, c in simplex_multi_indices("triangle", k):
+        # φ_abc = A(λ1)*B(λ2)*C(λ3)。
+        # A,dA：第一组因子 A(λ1) 及对 λ1 的导数；B、C 同理。
+        A, dA = factor(lam[0], a)
+        B, dB = factor(lam[1], b)
+        C, dC = factor(lam[2], c)
+
+        # 当前基函数在参考点 (ξ,η) 的值。
+        values.append(A * B * C)
+
+        # 下面利用链式法则计算对 ξ、η 的导数：
+        # λ1=1-ξ-η，λ2=ξ，λ3=η，所以
+        # ∂λ1/∂ξ=-1，∂λ2/∂ξ=1，∂λ3/∂ξ=0；
+        # ∂λ1/∂η=-1，∂λ2/∂η=0，∂λ3/∂η=1。
+        #
+        # ∂φ/∂ξ = (∂φ/∂λ1)*(-1) + (∂φ/∂λ2)*(1)
+        #        = -dA*B*C + A*dB*C；
+        # ∂φ/∂η = (∂φ/∂λ1)*(-1) + (∂φ/∂λ3)*(1)
+        #        = -dA*B*C + A*B*dC。
+        dphi_dxi = -dA * B * C + A * dB * C
+        dphi_deta = -dA * B * C + A * B * dC
+        grads.append((dphi_dxi, dphi_deta))
+
+    # 第 i 个 values 和 grads 对应同一个局部插值节点。
+    # 转成 NumPy 数组便于后续单元刚度矩阵数值积分。
+    return np.asarray(values), np.asarray(grads)
+
+
 # 【P_k 基函数核心】给定参考点 xi，返回所有局部 Lagrange 基函数值与梯度。
 # 数学公式：L_alpha(lambda)=Π_i Π_{j=0}^{alpha_i-1} (p*lambda_i-j)/(j+1)。
 # 每个多重指标 alpha 对应一个基函数，并满足 L_alpha(x_beta)=delta_{alpha,beta}。
 def simplex_basis(element_type: str, degree: int, xi):
     """任意 P_k 单纯形等距节点 Lagrange 基与参考梯度。"""
-    # p 就是有限元多项式次数 k。
+    # 二维三角形 Pk 使用与文档完全一致的重心坐标乘积公式。
+    if element_type == "triangle":
+        return triangle_lagrange_basis(int(degree), xi)
     p = int(degree)
     # 线段单独复用一维插值函数；结果重新排序成“端点在前，内部点在后”。
     if element_type == "interval":

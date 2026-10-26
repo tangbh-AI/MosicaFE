@@ -205,6 +205,41 @@ class LagrangeSpace(BaseFESpace):
     # 示例：两个三角形共用一条边，它们在公共边上的 P3 节点必须获得同一全局编号。
     # 最终 self.dof_map[c][j] = 第 c 个单元局部节点 j 对应的全局自由度编号。
     def _build_dof_map(self):
+        # PDF 补充步骤：三角形的 (a,b,c) 直接决定节点在单元中的位置。
+        # 用 (全局顶点编号, 重心整数权重) 建立 key；相邻单元共享边节点。
+        if self.mesh.element_type == "triangle":
+            # (1) 创建全局登记簿。book.get() 遇到同一个 key 时复用编号。
+            book = _DofBook()
+            # (2) 取得所有 (a,b,c)，满足 a+b+c=k；共有 (k+1)(k+2)/2 组。
+            # 注意：这些 alpha 的顺序必须与 reference.py 的基函数顺序完全一致。
+            indices = simplex_multi_indices("triangle", self.degree)
+            # dof_map[e][j] 存第 e 个三角形第 j 个局部节点的全局编号。
+            self.dof_map = []
+            # cell 是三个网格顶点的“全局顶点编号”，不是坐标！
+            # 例如 cell=(5,8,12)，代表该三角形连着三个编号为 5、8、12 的顶点。
+            for cell in self.mesh.elements:
+                local = []
+                for alpha in indices:
+                    # alpha=(a,b,c) 的参考位置是 (xi,eta)=(b/k,c/k)。
+                    # 示例：k=3，alpha=(2,1,0)，cell=(5,8,12)。
+                    # zip 先得到 (5,2),(8,1),(12,0)；过滤 0 再排序，
+                    # 得 key=((5,2),(8,1))，即“5、8 号顶点连线上的指定点”。
+                    # 相邻单元即使顶点顺序相反，排序后 key 也不变。
+                    key = tuple(sorted((int(v), int(a)) for v, a in zip(cell, alpha) if a))
+                    # support 是非零重心权重涉及的顶点：
+                    # 1 个顶点 -> 顶点节点；2 个 -> 边节点；3 个 -> 三角形内部节点。
+                    support = tuple(v for v, a in key)
+                    interior = len(support) == 3
+                    # 同一个 key 只分配一次全局编号；前缀 p 区分 Pk/Qk 节点。
+                    local.append(book.get(("p", key), support, interior))
+                # 一个单元需要 N_k 个全局索引，供矩阵组装 A[I_i,I_j] += Ke[i,j]。
+                self.dof_map.append(np.asarray(local, dtype=np.int64))
+            # 完成网格遍历后，保存全局自由度数和边界识别用的辅助数据。
+            self.n_dofs = book.count
+            self.dof_support = book.supports
+            self.dof_is_interior = np.asarray(book.interiors, dtype=bool)
+            return
+
         book = _DofBook()
         # 获取单元局部节点布局；其长度 n_local = 每个单元的局部基函数个数。
         descriptors = self._local_descriptors()
@@ -329,6 +364,9 @@ class LagrangeSpace(BaseFESpace):
         order = int(order)
         et = self.mesh.element_type
         # 非单纯形或积分阶较低时，直接复用公共 quadrature 模块的规则。
+        # 这里的 order 表示希望精确积分的多项式次数，不是积分点个数。
+        # 对三角形 Pk 刚度矩阵，被积函数次数至多 2k-2；载荷还涉及 f，
+        # 若 f 不是多项式（例如 sin(pi*x)sin(pi*y)），一般只可做到高精度近似。
         if et not in ("triangle", "tet") or order <= (4 if et == "triangle" else 3):
             return super().get_quadrature(order)
         if order in self._quad_cache:
@@ -410,6 +448,26 @@ class LagrangeSpace(BaseFESpace):
     # 对 Poisson 方程 -Delta u=f，Ke 是主要的单元矩阵；输出形状 (n_local,n_local)。
     def local_stiffness(self, cell_idx) -> np.ndarray:
         """单元刚度矩阵。"""
+        if self.mesh.element_type == "triangle":
+            # PDF 第4节：Ke_ij = |det J| sum_q wq (J^-T grad phi_i)·(J^-T grad phi_j)
+            pts, weights, _, grads_ref = self._quadrature_data(self.default_quad_order())
+            vertices = self.mesh.get_cell_vertices(cell_idx)
+            J, detJ = simplex_jacobian(vertices)
+            # grads_ref[q,i,:] = [∂phi_i/∂xi, ∂phi_i/∂eta]，
+            # shape 为 (N_q, N_k, 2)，分别对应“求积点、局部基函数、方向”。
+            # 文档用列向量：grad_x(phi_i)=J^{-T} grad_xi(phi_i)。
+            # 本程序把梯度存成行向量，所以等价地使用 grad_ref @ J^{-1}。
+            # 对直边三角形，J 只由三个顶点确定，与求积点无关。
+            grads = grads_ref @ np.linalg.inv(J)
+            # einsum 中：
+            #   q   = 求积点编号，i/j = 刚度矩阵的行/列（局部基函数编号）；
+            #   a   = 空间坐标方向，a=0 表示 x，a=1 表示 y。
+            #   qia,qja->ij 表示对 q 和 a 两个下标求和：
+            #   Ke[i,j]=|detJ| Σ_q w_q Σ_a grads[q,i,a]*grads[q,j,a]。
+            # 这恰好是 PDF 的 Ke_ij=∫_K grad(phi_i)·grad(phi_j) dxdy。
+            # 返回 (N_k,N_k) 矩阵，例：k=3 返回 10×10。
+            return abs(detJ) * np.einsum("q,qia,qja->ij", weights, grads, grads)
+
         # 取参考积分点/权重、参考基函数值 N、参考梯度 dN_ref。
         pts, w, N, dN_ref = self._quadrature_data(self.default_quad_order())
         _, jac, dets = self._element_geometry(cell_idx, pts)
@@ -443,6 +501,25 @@ class LagrangeSpace(BaseFESpace):
     # Fe[i] = integral_K f(x) phi_i(x) dx，其中 f 是 PDE 的右端项。
     def local_load(self, cell_idx, f, order=None) -> np.ndarray:
         """单元载荷向量。"""
+        if self.mesh.element_type == "triangle":
+            # PDF 第5节：Fe_i = |det J| sum_q wq f(xq,yq) phi_i(xiq,etaq)
+            order = self.load_quad_order() if order is None else int(order)
+            pts, weights, basis, _ = self._quadrature_data(order)
+            vertices = self.mesh.get_cell_vertices(cell_idx)
+            J, detJ = simplex_jacobian(vertices)
+            # pts[q,:]=[xi_q,eta_q] 为参考三角形的第 q 个求积点。
+            # 物理点采用 PDF 中 x=P1+J*[xi,eta]^T。
+            # 因为 pts 每行存一个点，矩阵计算对应 pts @ J.T。
+            xy = vertices[0] + pts @ J.T
+            # source[q]=f(x_q,y_q)。f 由 Poisson 问题传进来，可以是正弦等函数。
+            source = self._evaluate_function(f, xy)
+            # basis[q,i] = phi_i(xi_q,eta_q)，shape=(N_q,N_k)。
+            # weights*source 是 N_q 维向量，每个分量为 w_q*f(x_q,y_q)。
+            # basis.T @ (...) 会把每个积分点对各基函数的贡献累加：
+            # Fe[i]=|detJ| Σ_q w_q*f(x_q,y_q)*phi_i(xi_q,eta_q)。
+            # 返回 N_k 维局部载荷向量；k=3 时有 10 项。
+            return abs(detJ) * (basis.T @ (weights * source))
+
         order = self.load_quad_order() if order is None else int(order)
         pts, w, N, _ = self._quadrature_data(order)
         phys, _, dets = self._element_geometry(cell_idx, pts)
@@ -457,6 +534,10 @@ class LagrangeSpace(BaseFESpace):
     # ------------------------------------------------------------------
     # 全局刚度矩阵：将每个 Ke 根据 dof_map 加到全局矩阵的对应行列位置。
     def stiffness_matrix(self):
+        # 不在这里重新写双重 for 循环组装：base.py 的 _assemble 已完成。
+        # 对每个单元 e，读取局部 Ke 及其 dof_map[e]，执行
+        # A[dof_map[e][i], dof_map[e][j]] += Ke[i,j]。
+        # symmetric=True 声明 Poisson 刚度矩阵在正确组装时为对称矩阵。
         return self._assemble(self.local_stiffness, symmetric=True)
 
     # 全局质量矩阵：将所有单元 Me 累加组装。
