@@ -1,0 +1,570 @@
+% !TEX program = xelatex
+% =====================================================================
+%  Navier-Stokes 方程的 RT0 离散：可行性分析、正确路线与装配
+%  配套脚本：ns_rt0_验证.py（报告中的数字全部由它产生）
+%  编译：xelatex 报告_NS方程的RT0求解.tex（跑两次）
+% =====================================================================
+\documentclass[UTF8,11pt,a4paper]{ctexart}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{patterns,decorations.pathmorphing,calc,arrows.meta,positioning}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,
+  urlcolor=blue!55!black,hypertexnames=false,bookmarksnumbered=true}
+\renewcommand{\theHsubsection}{\theHsection.\arabic{subsection}}
+
+\linespread{1.12}
+\setlist[itemize]{itemsep=2pt,topsep=3pt,parsep=0pt}
+\setlist[enumerate]{itemsep=2pt,topsep=3pt,parsep=0pt}
+\setcounter{secnumdepth}{0}
+
+\newtheoremstyle{wjplain}{9pt}{9pt}{\itshape}{}{\bfseries}{}{0.6em}%
+  {\thmname{#1}\thmnumber{ #2}\thmnote{ #3}}
+\newtheoremstyle{wjdef}{9pt}{9pt}{}{}{\bfseries}{}{0.6em}%
+  {\thmname{#1}\thmnumber{ #2}\thmnote{ #3}}
+\theoremstyle{wjplain}
+\newtheorem*{proposition}{命题}
+\newtheorem*{theorem}{定理}
+\newtheorem*{corollary}{推论}
+\theoremstyle{wjdef}
+\newtheorem*{remark}{注记}
+\newtheorem*{note}{注}
+
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\abs}[1]{\lvert #1\rvert}
+\newcommand{\bn}{\boldsymbol n}
+\newcommand{\bu}{\boldsymbol u}
+\newcommand{\bv}{\boldsymbol v}
+\newcommand{\bq}{\boldsymbol q}
+\newcommand{\bx}{\boldsymbol x}
+\newcommand{\bg}{\boldsymbol g}
+\newcommand{\bK}{\boldsymbol K}
+\newcommand{\bI}{\boldsymbol I}
+\newcommand{\bG}{\boldsymbol G}
+\newcommand{\bV}{\boldsymbol V}
+\newcommand{\ba}{\boldsymbol a}
+\newcommand{\bP}{\boldsymbol P}
+\newcommand{\bA}{\boldsymbol A}
+\newcommand{\bB}{\boldsymbol B}
+\newcommand{\bC}{\boldsymbol C}
+\newcommand{\bD}{\boldsymbol D}
+\newcommand{\bM}{\boldsymbol M}
+\newcommand{\bR}{\boldsymbol R}
+\newcommand{\bS}{\boldsymbol S}
+
+\newcommand{\bvarphi}{\boldsymbol\varphi}
+\newcommand{\bT}{\boldsymbol\tau}
+\newcommand{\bF}{\boldsymbol F}
+\newcommand{\grad}{\nabla}
+\newcommand{\dive}{\nabla\cdot}
+\newcommand{\curl}{\nabla\times}
+\newcommand{\avg}[1]{\bigl\{#1\bigr\}}
+\newcommand{\jump}[1]{\bigl[#1\bigr]}
+\newcommand{\RT}{\mathrm{RT}}
+
+\tikzset{arr/.style={-{Latex[length=2mm]},thick}}
+\newcommand{\ttwo}[2]{#1 \quad\text{and}\quad #2}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries Navier--Stokes 方程的 RT0 离散}\\[6pt]
+{\large 可行性分析、正确路线与装配}\\[10pt]
+{\normalsize 赵典 \quad \today}
+\end{center}
+
+\vspace{0.3em}
+\begin{center}
+\begin{minipage}{0.94\textwidth}
+\small\raggedright
+\textbf{摘要}：本文讨论"用最低阶 Raviart--Thomas 元（RT0）求解定常不可压
+Navier--Stokes 方程"这件事在数学上能做与不能做什么。结论有两层：
+(i) \textbf{RT0 不能当速度空间}——RT0 场形如 $\bu=\boldsymbol a+b\bx$，其梯度是标量乘单位阵、
+旋度恒为零，表达不了任何剪切；再叠加 $\dive\bu=0$ 与 $P_0$ 压力，速度会被逼成分片常数。
+(ii) 把 RT0 放到\textbf{梯度/应力}的位置后，它与 $P_1$ 速度、$P_0$ 压力组成的三场系统仍然
+\textbf{数值奇异}（零空间维数随网格增长）。两条"最自然"的路线都被数值实验否定（第 2 节给出
+证据：$\max\lvert\curl\bu_h\rvert\equiv0$；三场矩阵零空间 $6,14,30$、条件数 $10^{33}$）。
+因此第 3--4 节给出\textbf{可装配}的正确路线：应力型混合元（PEERS 型）与 $H(\mathrm{div})$-DG
+（LDG，速度需 RT1/BDM1，即 $\dive$ 的值域要含 $P_1$），并逐块写出装配公式。
+第 5 节交代本工作的实现状态：诊断脚本可复现全部数字，求解器原型尚未通过线性精确解测试，
+故未并入 MosicaFE。
+\end{minipage}
+\end{center}
+
+\vspace{0.4em}
+{\small\tableofcontents}
+
+% =====================================================================
+\section{\texorpdfstring{1\quad 方程、无量纲化与弱形式}{1 方程、无量纲化与弱形式}}
+
+\subsection*{1.1\quad 强形式}
+
+不可压缩牛顿流体的 Navier--Stokes 方程（非定常）为
+\begin{equation}\tag{1.1}\label{eq:ns}
+  \left\{
+  \begin{aligned}
+    \rho\bigl(\partial_t\bu+(\bu\cdot\grad)\bu\bigr)-\mu\Delta\bu+\grad p&=\boldsymbol f,
+    &&\text{（动量守恒）}\\
+    \dive\bu&=0, &&\text{（质量守恒）}
+  \end{aligned}
+  \right.
+\end{equation}
+其中 $\bu$ 是速度、$p$ 是压力、$\rho$ 密度、$\mu$ 动力粘度、$\boldsymbol f$ 体积力。
+本文只讨论\textbf{定常}情形（$\partial_t\bu=0$，即 Stokes/Oseen/稳态 NS），
+非定常只是多一个质量项 $\rho(\bu^{n+1}-\bu^n)/\Delta t$，装配方式不变。
+
+\subsection*{1.2\quad 无量纲化与 Reynolds 数}
+
+取特征长度 $L$、特征速度 $U$，令 $\bx=L\hat\bx$、$\bu=U\hat\bu$、
+$p=\rho U^2\hat p$、$\boldsymbol f=(\rho U^2/L)\hat{\boldsymbol f}$，代入得
+\begin{equation}\tag{1.2}
+  (\hat\bu\cdot\hat\grad)\hat\bu-\frac{1}{\mathrm{Re}}\hat\Delta\hat\bu+\hat\grad\hat p
+  =\hat{\boldsymbol f},
+  \qquad
+  \boxed{\;\mathrm{Re}=\frac{\rho UL}{\mu}=\frac{UL}{\nu}\;}
+\end{equation}
+其中 $\nu=\mu/\rho$ 是运动粘度。于是"粘性项"的系数是 $1/\mathrm{Re}$：
+$\mathrm{Re}$ 大时对流占优、方程接近双曲型（需要迎风/稳定化）；$\mathrm{Re}$ 小时
+（Stokes 极限）方程是椭圆型。后文一律用 $\nu$ 或 $\mu$ 记粘性系数，不再区分。
+
+\subsection*{1.3\quad 弱形式与边界条件}
+
+设 $\Gamma_D$ 上给定速度 $\bu=\bg$（壁面 $\bg=0$、入口剖面、顶盖驱动），
+$\Gamma_N$ 上给"do-nothing"出流条件 $\mu\partial_n\bu-p\bn=0$。取试探/检验空间
+\begin{equation}\tag{1.3}
+  \bV=\{\bv\in [H^1(\Omega)]^d:\ \bv|_{\Gamma_D}=\bg\},\qquad
+  \bV_0=\{\bv\in [H^1(\Omega)]^d:\ \bv|_{\Gamma_D}=\boldsymbol 0\},
+  \qquad Q=L^2(\Omega),
+\end{equation}
+乘检验函数并分部积分（压力项只留 $(\grad p,\bv)=-(p,\dive\bv)+\langle p\bn,\bv\rangle$，
+$\Gamma_N$ 上的边界项与 do-nothing 条件相消）：
+\begin{equation}\tag{1.4}\label{eq:weak}
+  \left\{
+  \begin{aligned}
+    \rho\bigl((\bu\cdot\grad)\bu,\bv\bigr)+\mu(\grad\bu,\grad\bv)-(p,\dive\bv)
+      &=(\boldsymbol f,\bv), &&\forall\bv\in\bV_0,\\[2pt]
+    (\dive\bu,q)&=0, &&\forall q\in Q .
+  \end{aligned}
+  \right.
+\end{equation}
+
+\begin{remark}[粘性项为什么要求 $H^1$]
+弱形式里出现了 $\int_\Omega\grad\bu:\grad\bv\dd\bx$，这要求速度的\textbf{一阶导数}
+是 $L^2$ 函数，即 $\bu\in H^1$（或至少分片 $H^1$ 加面项修正）。这是 Section 2 的出发点：
+任何放进这个双线性形式的离散空间，都必须能"承载"速度的梯度。
+\end{remark}
+
+% =====================================================================
+\section{\texorpdfstring{2\quad RT0 能放在哪：三个角色与两条否定结论}{2 RT0 能放在哪：三个角色与两条否定结论}}
+
+\subsection*{2.1\quad RT0 是什么}
+
+最低阶 Raviart--Thomas 空间在单纯形 $K$（顶点 $a_0,\dots,a_d$）上是
+\begin{equation}\tag{2.1}
+  \RT_0(K)=\bigl\{\bv(\bx)=\boldsymbol a+b\bx:\ \boldsymbol a\in\R^d,\ b\in\R\bigr\},
+  \qquad
+  \int_{f_i}\bvarphi_i\cdot\bn_i\dd s=1,\quad
+  \div\bvarphi_i=\frac1{\lvert K\rvert},
+\end{equation}
+自由度是\textbf{面法向通量}：每个内部面一个自由度，故属于 $\bV_h\subset H(\mathrm{div})$。
+它是 Darcy 通量 $\bq=-K\grad p$（无旋）的天然空间，这也是我们前一项工作的基础。
+
+\subsection*{2.2\quad 角色 A：把 RT0 当速度——不可能}
+
+\begin{proposition}[RT0 场恒无旋]
+设 $\bu\in\RT_0(K)$，即 $\bu(\bx)=\boldsymbol a+b\bx$。则
+\begin{equation}\tag{2.2}
+  \grad\bu=b\,\bI,\qquad \curl\bu=0,\qquad \dive\bu=d\,b\quad(\text{常数}).
+\end{equation}
+因此 RT0 速度场在\textbf{每个单元上都是"平移 + 各向同性伸缩"}，
+\textbf{不能表达任何剪切}（$\partial_y u_1=0$、$\partial_x u_2=0$）。
+\end{proposition}
+
+\begin{proof}
+$\partial_j(\boldsymbol a+b\bx)_i=\partial_j(a_i+bx_i)=b\delta_{ij}$，即 $\grad\bu=b\bI$；
+旋度 $\curl\bu$ 的分量是 $\partial_1u_2-\partial_2u_1=b\cdot0-b\cdot0=0$；
+散度 $\dive\bu=\operatorname{tr}(b\bI)=db$。
+\end{proof}
+
+\begin{corollary}[叠加 $P_0$ 压力后更糟]
+若压力取分片常数 $Q_h=P_0$，则质量守恒 $(\dive\bu_h,q_h)=0\ (\forall q_h\in P_0)$
+等价于 $\dive\bu_h=0$ \textbf{逐单元成立}（因为 $\dive\RT_0\subset P_0$）。
+由 (2.2)，这迫使 $b=0$，即 $\bu_h$ \textbf{分片常数}。
+\end{corollary}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.95]
+  % 三个三角形，画 RT0 场方向
+  \draw[thick] (0,0) -- (3,0) -- (1.2,2.4) -- cycle;
+  \draw[thick] (3,0) -- (6,0) -- (4.4,2.2) -- cycle;
+  \draw[thick] (1.2,2.4) -- (4.4,2.2) -- (2.6,4.2) -- cycle;
+  \foreach \cx/\cy in {1.4/0.75, 4.45/0.7, 2.73/2.9}{
+     \foreach \ang in {0,45,90,135,180,225,270,315}{
+        \draw[blue!60!black, -{Latex[length=1.4mm]}, thin, shift={(\cx,\cy)}]
+          (\ang:0.08) -- (\ang:0.42);
+     }
+     \fill[red!70!black] (\cx,\cy) circle (1.6pt);
+  }
+  \node[align=left, anchor=west] at (6.4,2.6)
+    {\small 每个单元上 $\bu=\boldsymbol a+b\bx$：\\[2pt]
+     \small 梯度 $=b\bI$（各向同性）\\[2pt]
+     \small 旋度 $\equiv0$，散度 $=db$};
+  \node[align=center] at (3.0,-0.75)
+    {\small 随机 RT0 场：$\max\lvert\curl\bu_h\rvert=0.00\mathrm{e}{+}00$
+     （$n=2,4,8$ 三个网格，见 \texttt{结果\_ns\_rt0.txt}）};
+\end{tikzpicture}
+\caption{RT0 场的几何：各单元上都是"从中心向外均匀伸缩"的形状，没有剪切、没有涡。
+数值上对随机系数检验，旋度精确为 0。}
+\label{fig:rt0field}
+\end{figure}
+
+\begin{proof}[数值证据]
+对 $n=2,4,8$ 的三角形网格，取随机面通量 $\Phi$ 重构 $\bu_h$，在单元内多个点上用中心差分
+检验 $\curl\bu_h$，结果全是 $0.00\mathrm{e}{+}00$（表~\ref{tab:curl}）。
+\end{proof}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+$n$ & 单元数 & 面自由度 & $\max\lvert\curl\bu_h\rvert$ \\
+\midrule
+2 & 8 & 16 & $0.00\mathrm{e}{+}00$ \\
+4 & 32 & 56 & $0.00\mathrm{e}{+}00$ \\
+8 & 128 & 208 & $0.00\mathrm{e}{+}00$ \\
+\bottomrule
+\end{tabular}
+\caption{RT0 速度场的旋度检验（随机系数）。}
+\label{tab:curl}
+\end{table}
+
+\subsection*{2.3\quad 角色 B：把 RT0 当梯度/应力——与 $P_1$ 速度搭配会奇异}
+
+很自然的想法是：既然 $\grad\bu$ 承载剪切，就把它单独拿出来放在 RT0 里，
+速度仍取 $P_1$。于是三场系统（$\bG=\grad\bu$）：
+\begin{equation}\tag{2.3}\label{eq:three}
+  \left\{
+  \begin{aligned}
+    (\bG,\bT)+(\bu,\dive\bT)&=0, &&\forall\bT\in(\RT_0)^d,\\
+    (\bG,\grad\bv)-(p,\dive\bv)&=(\boldsymbol f,\bv), &&\forall\bv\in(P_1)^d,\\
+    (\dive\bu,q)&=0, &&\forall q\in P_0 .
+  \end{aligned}
+  \right.
+\end{equation}
+（第一个方程是 $\bG=\grad\bu$ 分部积分后的形式，第二个是动量方程，第三个是质量守恒。）
+数一下未知量与方程是匹配的，但：
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+$n$ & 未知量 & 秩 & 零空间维数 & 条件数 \\
+\midrule
+2 & 42  & 36  & 6  & $2.3\times10^{34}$ \\
+4 & 162 & 148 & 14 & $1.3\times10^{33}$ \\
+8 & 642 & 612 & 30 & $9.2\times10^{32}$ \\
+\bottomrule
+\end{tabular}
+\caption{三场系统 \eqref{eq:three} 的数值奇异：零空间维数随网格增长，条件数 $\sim10^{33}$。}
+\label{tab:three}
+\end{table}
+
+\begin{remark}[为什么必然奇异]
+关键在第一个方程的耦合项 $(\bu,\dive\bT)$。由于 $\dive\RT_0$ 只到 $P_0$，这一项
+\textbf{只看得见 $\bu$ 的单元均值}；而第三个方程 $(\dive\bu,q)$ 也只看得见
+$\dive\bu$ 的均值。于是所有"单元均值为零、且单元净通量为零"的 $P_1$ 速度模式
+（维数 $\sim O(1/h)$）在方程组里\textbf{完全不被约束}——这就是表~\ref{tab:three}
+里不断增长的零空间。要让系统闭合，必须让某个检验空间的散度\textbf{值域覆盖 $P_1$}，
+即应力要放在 $\mathrm{BDM}_1=P_1^2$（其散度为 $P_1$）或 RT1 上，而不是 RT0。
+\end{remark}
+
+\subsection*{2.4\quad 角色 C：RT0 做守恒通量后处理——合适}
+
+算完速度后，把 $\bu_h$ 投影到 RT0 的面法向自由度上
+\begin{equation}\tag{2.4}
+  \Phi_f=\int_f \bu_h\cdot\bn_f\dd s\quad\Longrightarrow\quad
+  \bu_h^{\RT_0}=\sum_f\Phi_f\bvarphi_f
+\end{equation}
+得到\textbf{跨单元法向连续、逐单元守恒}的通量。它可以直接喂给输运方程（有限体积/DG），
+这是 RT0 在流动问题里真正合适的位置（本库的
+\texttt{NavierStokesProblem.flux\_rt0} 就是这件事）。
+
+% =====================================================================
+\section{\texorpdfstring{3\quad 正确路线：应力型混合元与 $H(\mathrm{div})$-DG}{3 正确路线：应力型混合元与 H(div)-DG}}
+
+结论是：RT0 只能出现在\textbf{应力/梯度}或\textbf{通量后处理}位置，且速度空间必须
+"配得上"应力的散度值域。两条标准路线如下。
+
+\subsection*{3.1\quad 应力型混合元（PEERS 型 / Farhloul--Fortin）}
+
+取应力（或速度梯度）$\bT$ 的行在 $\RT_0$（或 $\mathrm{BDM}_1$）、速度 $\bu\in(P_1)^d$、
+压力 $p\in P_0$，再加一个\textbf{旋转乘子} $r$ 来弱上加对称性（PEERS 的做法）：
+\begin{equation}\tag{3.1}\label{eq:peers}
+  \left\{
+  \begin{aligned}
+    (\bG,\bT)+(\bu,\dive\bT)+(r,\operatorname{as}\bT)&=0, &&\forall\bT,\\
+    \nu(\bG,\grad\bv)-(p,\dive\bv)&=(\boldsymbol f,\bv), &&\forall\bv,\\
+    (\dive\bu,q)+(s,\operatorname{as}\bG)&=0, &&\forall q,\ s .
+  \end{aligned}
+  \right.
+\end{equation}
+其中 $\operatorname{as}\bT=T_{12}-T_{21}$ 是反对称部分。块结构
+\begin{equation}\tag{3.2}
+  \begin{pmatrix}
+    \bM_{\bG} & \bC^{\mathsf T} & 0 & \bR^{\mathsf T}\\
+    \nu\bC & 0 & -\bD^{\mathsf T} & 0\\
+    0 & \bD & 0 & \bS^{\mathsf T}\\
+    \bR & 0 & \bS & 0
+  \end{pmatrix}
+  \begin{pmatrix}\bG\\ \bu\\ p\\ r\end{pmatrix}
+  =\begin{pmatrix}0\\ \boldsymbol f\\ 0\\ 0\end{pmatrix}
+\end{equation}
+局部矩阵（单元 $K$，$d=2$）：
+\begin{align}
+  (\bM_{\bG})_{(i,k),(j,l)}&=\int_K\bvarphi_k\cdot\bvarphi_l\,\delta_{ij}\dd\bx
+    \quad(\text{每个分量一块 } \RT_0 \text{ 质量矩阵}),\tag{3.3}\\
+  \bC_{(a,i),(k,j)}&=\int_K\varphi_{k,j}\,\partial_i\lambda_a\dd\bx
+    \quad(\text{速度 }P_1\text{ 与 }\dive\bT\text{ 的耦合}),\tag{3.4}\\
+  \bD_{a,(b,i)}&=\int_K\psi_a\,\partial_i\lambda_b\dd\bx,\qquad
+  \bR_{a,(k,j)}=\pm\int_K\lambda_a\bvarphi_{k,j}\dd\bx .\tag{3.5}
+\end{align}
+
+\begin{remark}
+关键是 $\bC$ 里的 $\dive\bT$：若 $\bT\in\RT_0$ 则 $\dive\bT\in P_0$，$\bC$ 只看到
+$\bu$ 的均值（第 2.3 节的奇异）；取 $\bT\in\mathrm{BDM}_1=P_1^2$ 时 $\dive\bT\in P_1$，
+$\bC$ 成为 $P_1\times P_1$ 的满秩耦合，系统才闭合。
+\end{remark}
+
+\subsection*{3.2\quad $H(\mathrm{div})$-DG（LDG）：速度 RT1/BDM1，粘性用 SIPG}
+
+这是当前文献里的主流做法（Lehrenfeld--Schöberl；Cockburn--Kanschat--Schötzau）。
+速度取 $\RT_k$（$k\ge1$，$\dive\RT_k=P_k$ 才装得下压力/质量守恒），压力 $P_{k-1}$。
+粘性项用\textbf{对称内罚}（SIPG）处理破碎梯度：
+\begin{equation}\tag{3.6}
+  a_h(\bu,\bv)=\sum_K\mu\!\!\int_K\!\grad\bu:\grad\bv
+  -\sum_F\mu\!\!\int_F\!\avg{\grad\bu\,\bn}\cdot\jump{\bv}
+  -\sum_F\mu\!\!\int_F\!\avg{\grad\bv\,\bn}\cdot\jump{\bu}
+  +\sum_F\frac{\mu\eta}{h_F}\!\!\int_F\!\jump{\bu}\cdot\jump{\bv},
+\end{equation}
+其中 $\jump{\bv}=\bv^--\bv^+$、$\avg{\grad\bv}=\tfrac12(\grad\bv^-+\grad\bv^+)$，
+$\eta$ 是罚参数（取 $10$ 量级）。$H(\mathrm{div})$ 协调时 $\jump{\bv}\cdot\bn=0$，
+跳跃只剩\textbf{切向}部分——这正是 RT0 缺的那部分自由度。
+
+\subsection*{3.3\quad 三条路线的对比}
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\textwidth}{@{}l l l X@{}}
+\toprule
+路线 & 速度空间 & RT0 的角色 & 结论 \\
+\midrule
+速度-压力（直接） & $\RT_0$ & 速度 & \textbf{不可行}：无旋，剪切为零（图~\ref{fig:rt0field}） \\
+三场梯度 & $(P_1)^d$ & 梯度 & \textbf{奇异}：零空间 $O(1/h)$（表~\ref{tab:three}）\\
+应力型（PEERS） & $(P_1)^d$ & 应力/梯度 & 可行，需 $\mathrm{BDM}_1$ 或对称乘子 \\
+$H(\mathrm{div})$-DG & $\RT_1$/$\mathrm{BDM}_1$ & 速度 & 可行（主流），$\RT_0$ 不够 \\
+通量后处理 & 任意 & 通量 & 可行且推荐（$H(\mathrm{div})$ 守恒通量） \\
+\bottomrule
+\end{tabularx}
+\caption{三种角色的可行性。注意 $\RT_0$ 作为\textbf{速度}在两条路上都不行。}
+\label{tab:compare}
+\end{table}
+
+% =====================================================================
+\section{\texorpdfstring{4\quad 装配细则}{4 装配细则}}
+
+本节把上面几条路线里的矩阵逐块写出来，便于直接实现。
+
+\subsection*{4.1\quad 自由度与布局}
+
+以 $\RT_0$（应力）$+ (P_1)^d$（速度）$+ P_0$（压力）为例：
+\begin{itemize}
+  \item 应力：$d$ 个分量，每个分量是一个 $\RT_0$ 场，自由度在\textbf{面}上
+        （$\Phi_{f,i}=\int_f G_{i,:}\cdot\bn_f$），共 $d\,n_{\text{face}}$ 个；
+  \item 速度：$(P_1)^d$，每个顶点 $d$ 个分量，共 $d\,n_{\text{node}}$ 个；
+  \item 压力：每单元一个常数，共 $n_{\text{cell}}$ 个。
+\end{itemize}
+总未知量 $d\,n_{\text{face}}+d\,n_{\text{node}}+n_{\text{cell}}$。
+
+\subsection*{4.2\quad 单元矩阵}
+
+设单元 $K$ 的 $\RT_0$ 基函数 $\bvarphi_k$（$\div\bvarphi_k=\sigma_k/\lvert K\rvert$）、
+$P_1$ 基函数 $\lambda_a$、$P_0$ 基函数 $\psi_K\equiv1$。则
+\begin{align}
+  \bM^\sigma_{kl}&=\int_K\bvarphi_k\cdot\bvarphi_l\dd\bx
+   =\frac{S_k\cdot S_l+G_{kl}}{d^2(d+1)(d+2)\lvert K\rvert},
+   \quad S_k=\sum_j(\ba_j-\ba_k),\ G_{kl}=\sum_j(\ba_j-\ba_k)\cdot(\ba_j-\ba_l),
+   \tag{4.1}\\
+  \bC_{ak}&=\int_K\psi_K\,\div\bvarphi_k\dd\bx=\sigma_k,\qquad
+  \bD_{a(b)} = \int_K\psi_a\,\partial_b\lambda_a\dd\bx=\lvert K\rvert\,\partial_b\lambda_a,
+   \tag{4.2}\\
+  \bK^\nu_{ab}&=\mu\int_K\grad\lambda_a\cdot\grad\lambda_b\dd\bx
+   =\mu\lvert K\rvert\,\grad\lambda_a\cdot\grad\lambda_b. \tag{4.3}
+\end{align}
+(4.1) 是闭式（无需数值积分），(4.2) 里的 $\sigma_k=\pm1$（散度定理精确给出），
+(4.3) 因 $\grad\lambda_a$ 为常数而精确。
+
+\subsection*{4.3\quad 面项（SIPG）}
+
+对每个内部面 $F$（两个相邻单元 $K^-,K^+$，单位法向 $\bn$ 由 $K^-$ 指向 $K^+$），
+记 $S^{xy}_{ab}=\int_F(\grad\lambda^x_b\cdot\bn)\lambda^y_a\dd s$、$P^{xy}_{ab}=\int_F\lambda^x_a\lambda^y_b\dd s$。
+四种组合（$x,y\in\{-,+\}$）：
+\begin{equation}\tag{4.4}
+  \bB^{--}=-\tfrac{\mu}{2}\bS^{--},\quad
+  \bB^{-+}=-\tfrac{\mu}{2}\bS^{-+},\quad
+  \bB^{+-}=+\tfrac{\mu}{2}\bS^{+-},\quad
+  \bB^{++}=+\tfrac{\mu}{2}\bS^{++},
+\end{equation}
+面矩阵 $=$ $\bB$ 的四个块加上其转置，再叠加罚项
+\begin{equation}\tag{4.5}
+  \kappa=\frac{\mu\eta}{h_F},\qquad
+  \bK^{\text{pen}}=\kappa
+  \begin{pmatrix}\bP^{--}&-\bP^{-+}\\-\bP^{+-}&\bP^{++}\end{pmatrix},
+  \qquad h_F=\tfrac12(h_{K^-}+h_{K^+}).
+\end{equation}
+\textbf{注意}：四个块只能各加一次（先拼出 $6\times6$ 局部矩阵再整体累加），
+否则交叉块会被重复计数，罚项变成 $\kappa(\bP^{--}-2\bP^{-+}+\bP^{++})$，不再半正定。
+
+边界 $\Gamma_D$ 上（$\bu=\bg$）：
+\begin{equation}\tag{4.6}
+  \bK^\Gamma=-\mu(\bS+\bS^{\mathsf T})+\kappa\bP,\qquad
+  \bF^\Gamma=-\mu\int_F(\grad\lambda_a\cdot\bn)\,\bg_i\dd s
+  +\kappa\int_F\lambda_a\,\bg_i\dd s .
+\end{equation}
+右端第一项是 $(\grad\bv\,\bn)\cdot\bg$ 里的 \textbf{$\bg$ 的第 $i$ 个分量}，
+不是 $\bg\cdot\bn$——这是最容易写错的一处。$\Gamma_N$（do-nothing）不加任何面项。
+
+\subsection*{4.4\quad 鞍点系统与求解}
+
+块组装成
+\begin{equation}\tag{4.7}
+  \begin{pmatrix}\bA&-\bB^{\mathsf T}\\\bB&0\end{pmatrix}
+  \begin{pmatrix}\bu\\ p\end{pmatrix}
+  =\begin{pmatrix}\boldsymbol f\\ 0\end{pmatrix},
+  \qquad
+  \bA=\bK^\nu+\bK^{\text{pen}},\quad
+  \bB_{Ka}=\int_K\dive\bvarphi_a\ (\text{或 } \psi_K\,\partial_i\lambda_a).
+\end{equation}
+$\bA$ 对称正定（SIPG 在 $\eta$ 足够大时强制），故可消去速度
+\begin{equation}\tag{4.8}
+  \bS\,p=\bB\bA^{-1}\boldsymbol f,\qquad \bS=\bB\bA^{-1}\bB^{\mathsf T},
+\end{equation}
+用稀疏 LU 加 Schur-CG 求解（$\bS$ 对称正定）。
+压力只定到常数：$\bB^{\mathsf T}\boldsymbol 1=0$（连续压力时精确成立），
+故需固定一个参考压力，或对 $\bS$ 用最小二乘后平移到零均值。
+
+\subsection*{4.5\quad 非线性：Picard 迭代}
+
+对流项线性化：用上一迭代的 $\bu^{(m)}$ 代替 $\bu$，
+\begin{equation}\tag{4.9}
+  \rho\bigl((\bu^{(m)}\cdot\grad)\bu^{(m+1)},\bv\bigr)
+  +\mu(\grad\bu^{(m+1)},\grad\bv)-(p^{(m+1)},\dive\bv)=(\boldsymbol f,\bv),
+\end{equation}
+配 \eqref{eq:weak} 的质量守恒。收敛判据
+$\lVert\bu^{(m+1)}-\bu^{(m)}\rVert/\lVert\bu^{(m+1)}\rVert<10^{-10}$，
+步数一般 5--15（$\mathrm{Re}$ 越大越慢）。$\mathrm{Re}$ 大时需 Newton 或延续法。
+
+% =====================================================================
+\section{\texorpdfstring{5\quad 本工作的实现状态与诊断结果}{5 本工作的实现状态与诊断结果}}
+
+\subsection*{5.1\quad 可复现的诊断}
+
+\texttt{ns\_rt0\_验证.py} 复现了本文的两条否定结论：
+\begin{itemize}
+  \item RT0 速度的旋度：$n=2,4,8$ 三个网格上 $\max\lvert\curl\bu_h\rvert=0.00\mathrm{e}{+}00$；
+  \item 三场系统 \eqref{eq:three}：零空间维数 $6\to14\to30$、条件数 $10^{33}$
+        （表~\ref{tab:three}）。
+\end{itemize}
+
+\subsection*{5.2\quad 求解器原型}
+
+为了给"能用的版本"打基础，我们实现了一个\textbf{Taylor--Hood}（速度 $P_2$、压力 $P_1$）
+的定常 NS 原型（\texttt{ns\_stokes\_prototype.py}），因为它是本库现有空间下唯一
+无条件稳定的速度-压力对。它目前\textbf{尚未}通过线性精确解测试：用
+$\bu=(\bx_1,-\bx_2)$、$p=0$ 检验时误差为 $4.9\times10^{-1}$（应为机器零），
+说明鞍点装配（压力块与边界消除的顺序）仍有缺陷。因此\textbf{没有}把它并入 MosicaFE——
+把未验证的求解器放进库里是不负责任的。
+
+\subsection*{5.3\quad 已确定可以工作的部分}
+
+\begin{itemize}
+  \item RT0 的面拓扑、闭式质量矩阵、散度矩阵、面法向符号（库内已有，Darcy 已充分验证）；
+  \item $\RT_0$ 的加权质量矩阵（Darcy 用的 $\int K^{-1}\bvarphi_i\cdot\bvarphi_j$）；
+  \item RT0 通量后处理（把任意速度场投影成守恒面通量）——本节的
+        \texttt{flux\_rt0} 思路，可直接用 \texttt{V.interpolate\_flux} 实现。
+\end{itemize}
+
+% =====================================================================
+\section{\texorpdfstring{6\quad 结论与下一步}{6 结论与下一步}}
+
+\begin{enumerate}
+  \item \textbf{RT0 不能做 NS 的速度}：$\grad\bu=b\bI$、$\curl\bu\equiv0$，
+        剪切（Poiseuille、边界层、涡）一律表示不了；再配 $P_0$ 压力还会把速度逼成
+        分片常数。这不是实现问题，是空间本身的性质。
+  \item \textbf{RT0 做梯度、$P_1$ 做速度也不行}：$(\bu,\dive\bT)$ 只看到速度的单元均值，
+        系统有 $O(1/h)$ 维零空间（数值上条件数 $10^{33}$）。
+  \item \textbf{正确路线}：把 RT0 放到\textbf{应力}位置并配 $\mathrm{BDM}_1$/RT1 型的
+        速度（或 PEERS 的对称乘子）；或者走 $H(\mathrm{div})$-DG 用 $\RT_k$（$k\ge1$）做速度。
+        两条路的逐块装配已在第 4 节给出。
+  \item \textbf{RT0 最合适的位置}是无旋通量：Darcy 的 $\bq=-K\grad p$、以及任意速度场的
+        守恒通量后处理。
+  \item \textbf{下一步}（按优先级）：
+        \begin{enumerate}
+          \item 修好 Taylor--Hood 原型的压力块装配（与已有 Darcy 的鞍点代码对照即可定位），
+                通过线性精确解与 Poiseuille 两个测试；
+          \item 增加 $\mathrm{BDM}_1$（$=P_1^2$，面法向 2 自由度）速度空间，实现
+                应力型/ $H(\mathrm{div})$-DG 的 NS，验证 $O(h)$ 或 $O(h^2)$；
+          \item 把 Taylor--Hood 算出的速度用 RT0 投影成守恒通量，接输运方程。
+        \end{enumerate}
+\end{enumerate}
+
+\vspace{0.6em}
+\noindent\textbf{一句话总结}：RT0 是"无旋场的通量空间"，它天生适合 Darcy 渗流；
+Navier--Stokes 的速度必须有旋，所以 RT0 只能退到应力/通量的位置——这一点用
+$\max\lvert\curl\bu_h\rvert\equiv0$ 和 $10^{33}$ 的条件数都能直接看到。
+
+% =====================================================================
+\appendix
+\section{\texorpdfstring{附录 A\quad 符号表}{附录 A 符号表}}
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+记号 & 名称 & 说明 \\
+\midrule
+$\bu,\ p$ & 速度、压力 & NS 的未知量 \\
+$\mu,\ \nu$ & 动力/运动粘度 & $\nu=\mu/\rho$ \\
+$\mathrm{Re}$ & Reynolds 数 & $\rho UL/\mu$ \\
+$\RT_k$ & Raviart--Thomas 空间 & $\RT_0$：$\ba+b\bx$，面法向通量自由度 \\
+$\mathrm{BDM}_1$ & Brezzi--Douglas--Marini & 在三角形上 $=P_1^2$，$\dive$ 值域 $P_1$ \\
+$\jump{\cdot},\ \avg{\cdot}$ & 跳跃、平均 & 面量 \\
+$\eta,\ h_F$ & 罚参数、面尺寸 & SIPG 罚项系数 $\mu\eta/h_F$ \\
+$\bG$ & 速度梯度 & $\bG=\grad\bu$（三场系统的未知量） \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{\texorpdfstring{附录 B\quad 装配清单（可直接照着写代码）}{附录 B 装配清单}}
+\begin{enumerate}
+  \item 读网格，建面拓扑（全局面编号、相邻单元、外法向符号、面测度）；
+  \item 对每个单元：算 $\RT_0$ 闭式质量矩阵 (4.1)、散度 $\pm1$ (4.2)、
+        $P_1$ 刚度 (4.3)、载荷；
+  \item 对每个内部面：算 $S^{xy}$、$P^{xy}$，拼 $6\times6$ 局部矩阵（一致性块 + 罚块），
+        整体累加一次；
+  \item 对每个 $\Gamma_D$ 面：加 (4.6)，注意右端用 $\bg_i$ 而不是 $\bg\cdot\bn$；
+  \item 拼鞍点 (4.7)；压力固定常数（$\bB^{\mathsf T}\boldsymbol1=0$）；
+  \item 用 Schur 补 (4.8) 或直接法求解；
+  \item 外层 Picard (4.9) 直到残差 $<10^{-10}$；
+  \item 后处理：速度投影到 $\RT_0$ 得守恒通量（用于输运）。
+\end{enumerate}
+
+\end{document}

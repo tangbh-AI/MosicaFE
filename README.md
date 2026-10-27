@@ -441,3 +441,39 @@ FEM、VEM、RT0 三类元都在库内实现，没有任何需要额外接入的�
 ## 许可
 
 MosicaFE 按 MIT 发布，全部代码都是库自身实现。
+
+---
+
+## RT0 混合元：Darcy 渗流与定常电流场
+
+本分支在 RT0×P0 混合元上新增两个物理模块与三个算例目录：
+
+| 模块 | 方程 | 入口 |
+| --- | --- | --- |
+| `physics/darcy.py` | $\boldsymbol q=-K\nabla p,\ \nabla\cdot\boldsymbol q=f$ | `DarcyProblem` / `solve_darcy` |
+| `physics/conduction.py` | $\boldsymbol J=-\sigma\nabla\varphi,\ \nabla\cdot\boldsymbol J=f$（含界面接触电阻） | `ConductionProblem` / `solve_conduction` |
+
+```python
+from MosicaFE import Mesh, solve_darcy, solve_conduction
+
+mesh = Mesh.rectangle(nx=32, ny=32)
+bc = lambda mid, n: "D" if (mid[0] < 1e-12 or mid[0] > 1 - 1e-12) else "N"
+
+Q, P = solve_darcy(mesh, g=lambda x: 1.0 - x[:, 0], K=2.5, bc=bc)            # q = (2.5, 0)
+J, V = solve_conduction(mesh, g=lambda x: 1.0 - x[:, 0], sigma=2.0, bc=bc)   # I = 2, R = 0.5
+```
+
+* 通量质量矩阵带系数权重：$\boldsymbol A_{ij}=\int(K^{-1}\boldsymbol\varphi_i)\cdot\boldsymbol\varphi_j$
+  （`V.weighted_flux_mass_matrix(K)`，闭式，`mode="cell"` / `"quad"`）；
+* 压力/电势 Dirichlet 是**自然**边界条件；流量/电流注入是**本质**边界条件；
+* 电流场支持界面接触电阻 $\llbracket\varphi\rrbracket=R_c\,\boldsymbol J\cdot\boldsymbol n$，
+  在混合格式里只是对角修正 $\boldsymbol A_{ff}\leftarrow\boldsymbol A_{ff}+R_c/|f|$；
+* 后处理：总流量、电阻 $R=\Delta\varphi/|I|$、焦耳热 $P=\boldsymbol\Phi^{\mathsf T}\boldsymbol A\boldsymbol\Phi$。
+
+算例（`examples/`）：
+
+* `RT0-Darcy/`：手写独立实现 + 库调用版 + 详解版（注释 22%）+ 网格加密讲解 + 旧新对比；
+* `RT0-Conduction/`：电阻、分层串联、接触电阻、与 Darcy 对拍；
+* `NS-RT0/`：Navier–Stokes 用 RT0 的可行性分析报告（RT0 无旋，不能当速度）。
+
+测试：`tests/test_physics_solvers.py` 新增 16 项（Darcy 10 + 电流场 6），全库 122 项通过。

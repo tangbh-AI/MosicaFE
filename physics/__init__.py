@@ -1,11 +1,14 @@
 """PDE 弱形式与组装。
 
 内置问题：:class:`PoissonProblem`、:class:`MixedPoissonProblem`、
+:class:`DarcyProblem`、:class:`ConductionProblem`、
 :class:`ReactionDiffusionProblem`、:class:`HelmholtzProblem`。
 用 :mod:`MosicaFE.physics.registry` 可以注册自己的新方程。
 """
 
 from .base import BasePhysics
+from .conduction import ConductionProblem
+from .darcy import DarcyProblem
 from .helmholtz import HelmholtzProblem
 from .mixed_poisson import MixedPoissonProblem
 from .poisson import PoissonProblem
@@ -21,6 +24,8 @@ __all__ = [
     "BasePhysics",
     "PoissonProblem",
     "MixedPoissonProblem",
+    "DarcyProblem",
+    "ConductionProblem",
     "ReactionDiffusionProblem",
     "HelmholtzProblem",
     "register_problem",

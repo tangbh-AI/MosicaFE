@@ -53,7 +53,7 @@ FEM、VEM、RT0 三类元都是库自身的实现：RT0×P0 的单元基函数�
 from __future__ import annotations
 
 from .api import ELEMENT_ALIASES, make_space, resolve_element, run, solve_poisson
-from .api import solve_helmholtz
+from .api import solve_conduction, solve_darcy, solve_helmholtz
 from .core.facets import FacetTopology, build_facet_topology
 from .core.mesh import Mesh
 from .core.quadrature import (
@@ -63,6 +63,8 @@ from .core.quadrature import (
     simplex_quadrature,
 )
 from .physics.base import BasePhysics
+from .physics.conduction import ConductionProblem
+from .physics.darcy import DarcyProblem
 from .physics.helmholtz import HelmholtzProblem
 from .physics.mixed_poisson import MixedPoissonProblem
 from .physics.poisson import PoissonProblem
@@ -118,6 +120,8 @@ __all__ = [
     "MixedPoissonProblem",
     "ReactionDiffusionProblem",
     "HelmholtzProblem",
+    "DarcyProblem",
+    "ConductionProblem",
     "register_problem",
     "get_problem_class",
     "available_problems",
@@ -142,6 +146,8 @@ __all__ = [
     # api
     "solve_poisson",
     "solve_helmholtz",
+    "solve_darcy",
+    "solve_conduction",
     "run",
     "make_space",
     "resolve_element",
