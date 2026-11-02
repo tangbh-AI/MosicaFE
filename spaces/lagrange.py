@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .._compat import from_triplets
+
 # reference_dimension 返回参考单元的空间维数；下面四个工具负责参考域到物理域的几何转换。
 # apply_affine_map: 参考坐标 xi -> 物理坐标 x；compute_jacobian: 计算映射雅可比矩阵 J。
 # simplex_jacobian: 单纯形仿射映射的 J；transform_gradient: 根据 J^{-T} 把参考梯度转换到物理梯度。
@@ -396,9 +398,10 @@ class LagrangeSpace(BaseFESpace):
         if self._is_tensor():
             # Q_k: 四边形/六面体映射的 J 可能随参考积分点变化。
             _, jac, dets = self._element_geometry(cell_idx, pts)
-            grads = np.asarray([
-                transform_gradient(grads_ref[q], jac[q]) for q in range(len(pts))
-            ])
+            # 每个积分点解 J_q^T grad_x^T = grad_ref^T；批量 solve 代替点循环。
+            grads = np.linalg.solve(
+                np.swapaxes(jac, -1, -2), np.swapaxes(grads_ref, -1, -2)
+            ).swapaxes(-1, -2)
         else:
             # 所有单纯形 P_k（线段/三角形/四面体）共用常数雅可比 J。
             J, detJ = simplex_jacobian(vertices)
@@ -413,14 +416,22 @@ class LagrangeSpace(BaseFESpace):
     # Me[i,j] = integral_K phi_i phi_j dx；Helmholtz、时间依赖 PDE 常用。
     def local_mass(self, cell_idx) -> np.ndarray:
         """单元质量矩阵。"""
+        if not self._is_tensor():
+            _, detJ = simplex_jacobian(self.mesh.get_cell_vertices(cell_idx))
+            return abs(detJ) * self._reference_mass()
         pts, w, N, _ = self._quadrature_data(self.mass_quad_order())
-        _, _, dets = self._element_geometry(cell_idx, pts)
-        nl = N.shape[1]
-        Me = np.zeros((nl, nl))
-        for q in range(len(w)):
-            # np.outer(N[q],N[q]) 的 (i,j) 项就是 phi_i(x_q)*phi_j(x_q)。
-            Me += (w[q] * dets[q]) * np.outer(N[q], N[q])
-        return Me
+        vertices = self.mesh.get_cell_vertices(cell_idx)
+        dets = np.array([abs(compute_jacobian(vertices, xi)[1]) for xi in pts])
+        # N 为 (积分点数, 局部自由度数)，广播将每行乘以物理积分权重。
+        return N.T @ ((w * dets)[:, None] * N)
+
+    def _reference_mass(self):
+        """仿射单纯形的参考质量矩阵，复用已有参考数据缓存。"""
+        key = ("mass", self.mass_quad_order())
+        if key not in self._basis_cache:
+            _, weights, basis, _ = self._quadrature_data(self.mass_quad_order())
+            self._basis_cache[key] = basis.T @ (weights[:, None] * basis)
+        return self._basis_cache[key]
 
     # ===== 单元载荷向量 =====
     # Fe[i] = integral_K f(x) phi_i(x) dx，其中 f 是 PDE 的右端项。
@@ -446,17 +457,49 @@ class LagrangeSpace(BaseFESpace):
     # ------------------------------------------------------------------
     # 全局矩阵
     # ------------------------------------------------------------------
-    # 全局刚度矩阵：将每个 Ke 根据 dof_map 加到全局矩阵的对应行列位置。
+    def _assemble_lagrange(self, mass=False):
+        """预分配 COO 三元组；单纯形分块计算，其他单元保留单元循环。"""
+        dofs = np.asarray(self.dof_map, dtype=np.int64)
+        n_cells, n_local = dofs.shape
+        # 第 (e,i,j) 项对应全局位置 (dofs[e,i], dofs[e,j])。
+        rows = np.repeat(dofs, n_local, axis=1).ravel()
+        cols = np.tile(dofs, (1, n_local)).ravel()
+        values = np.empty((n_cells, n_local, n_local))
+        if self._is_tensor():
+            local_matrix = self.local_mass if mass else self.local_stiffness
+            for cell in range(n_cells):
+                values[cell] = local_matrix(cell)
+        else:
+            if mass:
+                reference_mass = self._reference_mass()
+            else:
+                _, weights, _, grads_ref = self._quadrature_data(self.default_quad_order())
+            # 控制梯度临时数组大小；每块最多 256 个单元，至少处理一个单元。
+            block_size = 256 if mass else max(1, min(256, 262144 // grads_ref.size))
+            for start in range(0, n_cells, block_size):
+                stop = min(start + block_size, n_cells)
+                vertices = self.mesh.nodes[np.asarray(self.mesh.elements[start:stop])]
+                # J[e,a,b] = x_{b+1,a} - x_{0,a}，列为单元边向量。
+                jac = (vertices[:, 1:] - vertices[:, :1]).swapaxes(-1, -2)
+                dets = np.abs(np.linalg.det(jac))
+                if mass:
+                    values[start:stop] = dets[:, None, None] * reference_mass
+                else:
+                    # (块单元数, 积分点数, 局部自由度数, 空间维数)。
+                    grads = grads_ref[None, ...] @ np.linalg.inv(jac)[:, None, ...]
+                    values[start:stop] = np.einsum(
+                        "q,cqia,cqja->cij", weights, grads, grads
+                    ) * dets[:, None, None]
+        matrix = from_triplets(rows, cols, values.ravel(), (self.n_dofs, self.n_dofs))
+        # 与公共组装路径一致，保留原有对称化与 SciPy/NumPy 回退行为。
+        return 0.5 * (matrix + matrix.T)
+
     def stiffness_matrix(self):
-        # 不在这里重新写双重 for 循环组装：base.py 的 _assemble 已完成。
-        # 对每个单元 e，读取局部 Ke 及其 dof_map[e]，执行
-        # A[dof_map[e][i], dof_map[e][j]] += Ke[i,j]。
-        # symmetric=True 声明 Poisson 刚度矩阵在正确组装时为对称矩阵。
-        return self._assemble(self.local_stiffness, symmetric=True)
+        return self._assemble_lagrange()
 
     # 全局质量矩阵：将所有单元 Me 累加组装。
     def mass_matrix(self):
-        return self._assemble(self.local_mass, symmetric=True)
+        return self._assemble_lagrange(mass=True)
 
     # 全局载荷向量：将各单元 Fe 根据局部到全局映射累加。
     def load_vector(self, f, order=None):
