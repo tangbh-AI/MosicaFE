@@ -126,6 +126,9 @@ u = HelmholtzProblem(V, f=source, g=lambda x: 0.0, k=1.0).solve()  # 分步写�
 
 网格由 `MosicaFE.Mesh` 生成：
 
+高效实现及逐部分注释见 [网格生成代码说明](docs/mesh_generation_zh.md)。规则网格批量生成，
+Voronoi 使用单平面镜像和批量去重，混合网格使用批量邻接与缓存面模板；原调用接口保持不变。
+
 | 工厂 | 区域 | 单元 |
 | --- | --- | --- |
 | `Mesh.interval(a, b, nx)` | 一维区间 | 线段 |
@@ -135,7 +138,39 @@ u = HelmholtzProblem(V, f=source, g=lambda x: 0.0, k=1.0).solve()  # 分步写�
 | `Mesh.box(..., element_type="hex")` | 长方体 | 六面体 |
 | `Mesh.pentagon(nx, ny)` | 正方形 | 五边形（棋盘格） |
 | `Mesh.voronoi_polygon(n_points, seed)` | 正方形 | Voronoi 多边形 |
+| `Mesh.mixed_polygon(nx, ny, max_sides=8)` | 矩形 | 三角形至多边形混合，可含星形凹单元 |
+| `Mesh.mixed_polyhedron(nx, ny, nz, split=.35)` | 长方体 | 四面体、不同底面的棱锥及棱柱混合 |
 | `Mesh.from_arrays(nodes, elements)` | 自定义 | 自动推断 |
+
+---
+
+主程序可直接生成混合形状的 VEM 网格，不需要手写节点、连接关系或三维面：
+
+```python
+from MosicaFE import Mesh, solve_poisson
+
+mesh = Mesh.mixed_polygon(nx=16, ny=16, max_sides=8, seed=42)
+# 三维换成下一行，后续求解接口相同：
+# mesh = Mesh.mixed_polyhedron(nx=4, ny=4, nz=2, max_sides=8, split=.35, seed=42)
+u = solve_poisson(mesh, element="VEM", degree=2, f=source, g=boundary)
+```
+
+精简完整算例在 `examples/vem_mixed_mesh.py`，直接运行生成二维网格、数值解和误差；
+将末尾 `main()` 改为 `main(dim=3)` 可运行三维。两种网格生成器仅依赖 NumPy。
+网格类、所有生成实现及公共数组工具统一集中在 `core/mesh.py`，VEM 求解器继续独立。
+
+- `nx, ny` 是合并前的矩形分格数，`nz` 是三维挤出的层数；实际单元数由合并及分锥决定。
+- `max_sides` 控制二维多边形（或三维母单元底面）的最大边数，3 表示三角形底网格。
+- `jitter=.15` 控制内部节点扰动，范围为 `[0, .25)`；边界保持在给定的矩形/长方体上。
+- `concave=True` 允许星形凹单元；设为 `False` 仅生成凸单元，可能保留共线边点。
+- 三维 `split` 是母棱柱分锥的概率；0 保留全部棱柱，1 全部分锥。共享面完整保留，无悬挂边面。
+- `bbox` 分别按 `(xmin,xmax,ymin,ymax)` 或再加 `(zmin,zmax)` 指定区域；固定 `seed` 可复现。
+
+“任意形状”指可变边数、面数及混合拓扑，并允许满足星形条件的凹单元。
+随机网格不保证每次包含所有边数；当前 VEM 仍要求单元及面的顶点均值位于星形核内、
+三维面共面，不支持任意非星形单元或曲面边界。三维混合生成器采用挤出/分锥构造，
+需要非挤出的随机多面体时可继续使用 `Mesh.voronoi_polyhedron(...)`；
+用户已有的其他合法多面体仍可通过 `Mesh.from_arrays(..., faces=...)` 输入。
 
 ---
 
@@ -160,30 +195,30 @@ python examples/vem_poisson_3d.py
 ```
 
 各自主程序保持“选网格 → 选元并求解 → 可视化”的结构。
-修改 `main(n_points=..., degree=...)` 的默认值即可选择网格数量和阶数，核心调用与 FEM 相同：
+两个主程序默认运行三阶 `degree=3`；修改 `main(n_points=..., degree=...)` 的默认值即可选择网格数量和阶数。程序直接传递 `degree`，不再转换为另一个变量 `k`。核心调用与 FEM 相同：
 
 ```python
-out = solve_poisson(mesh, element="VEM", degree=k, f=source, g=lambda x: 0.0,
+out = solve_poisson(mesh, element="VEM", degree=3, f=source, g=lambda x: 0.0,
                     solver="direct", return_all=True)
 u, V = out["u"], out["space"]
 plot_solution(u, mesh, V)
 ```
 
-原有批量加密实验保存在 `examples/vem_convergence.py`：
+高阶测试（包含三阶多项式再生、非零边界及二维/三维正弦解误差下降）可直接运行：
 
 ```powershell
-python examples/vem_convergence.py --degree 1 2 3 4 --levels 2 4 --plot
+python tests/run_tests.py
 ```
 
 算例仍然是单位区域上的 `-Δu=f, u=0`：二维
 `u=sin(πx)sin(πy), f=2π²u`；三维再乘 `sin(πz)`，`f=3π²u`。
-当前两个主程序默认使用 1024 单元二维 Voronoi 多边形网格、192 单元三维 Voronoi 多面体网格，均为二阶。
+当前两个主程序默认使用 1024 单元二维 Voronoi 多边形网格、192 单元三维 Voronoi 多面体网格，均默认运行三阶（`degree=3`）。
 每个单元可以有不同的顶点数和面数，每个面也可以有不同的边数。
 二维输出单独保存在 `examples/output/vem_2d/`，三维在 `examples/output/vem_3d/`。
 其中 `mesh_n数量.png` 是网格图，`solution_k阶数_n数量.png` 是解图，
 `result_k阶数_n数量.json` 保存网格尺寸、自由度、L2/H1/Linf 投影误差及计算耗时（不含绘图）。
 本次细网格复算的分维度结果汇总为各目录中的 `summary.json`。
-批量实验结果写入 `examples/output/vem_poisson_results.json`，`--plot` 额外保存二维图和三维中截面图。
+历史批量实验结果保存在 `examples/output/vem_poisson_results.json`。本次测试日志在 `examples/output/vem_degree3_tests.txt`，二阶与三阶的局部矩阵维数及多项式解检查在 `examples/output/vem_degree3_check.json`。
 二维解图使用节点值，
 三维解图在真实 `z=0.5` 截面上评估 VEM 投影值；误差在高阶求积点上计算。
 
